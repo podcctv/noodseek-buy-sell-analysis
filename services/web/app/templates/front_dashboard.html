@@ -109,16 +109,8 @@
         return "待判断";
       }
 
-      function buildTrainingUrl(post) {
-        const params = new URLSearchParams({
-          brand: post.brand || "",
-          product_name: post.product_name || "",
-          keywords: [post.product_name || "", post.title || ""].filter(Boolean).join(", "),
-          note: "来源: 帖子明细人工标注(品牌识别训练)",
-          source_title: post.title || "",
-          source_link: post.link || "",
-        });
-        return `/admin/brand-training?${params.toString()}`;
+      function buildEditUrl(post) {
+        return `/admin/post-edit/${encodeURIComponent(post.uid || "")}`;
       }
 
       function renderRows() {
@@ -133,7 +125,7 @@
             <td>${[p.product_name || "-", p.product_config || "-"].join(" | ")}</td>
             <td>${p.price || "-"}</td>
             <td>${(Number(p.confidence || 0) * 100).toFixed(0)}%</td>
-            ${isAdmin ? `<td><a class="btn-mini" href="${buildTrainingUrl(p)}">AI标注训练</a></td>` : ""}
+            ${isAdmin ? `<td><a class="btn-mini" href="${buildEditUrl(p)}">编辑</a></td>` : ""}
           </tr>`).join("");
       }
 

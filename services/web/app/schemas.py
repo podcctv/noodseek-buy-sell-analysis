@@ -50,15 +50,29 @@ class BrandTrainingSample(BaseModel):
     id: str
     brand: str
     product_name: str = ""
+    product_config: str = ""
     keywords: list[str] = Field(default_factory=list)
     note: str = ""
     created_at: str
+
+
+class PostOverride(BaseModel):
+    """帖子人工修正结果，用作展示与后续 AI 参考。"""
+
+    uid: str
+    brand: str = ""
+    product_name: str = ""
+    product_config: str = ""
+    source_title: str = ""
+    source_link: str = ""
+    updated_at: str
 
 
 class TrainingConfig(BaseModel):
     """训练与参考配置。"""
 
     brand_samples: list[BrandTrainingSample] = Field(default_factory=list)
+    post_overrides: list[PostOverride] = Field(default_factory=list)
 
 
 class AppConfig(BaseModel):
