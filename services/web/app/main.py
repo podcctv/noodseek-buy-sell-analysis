@@ -19,8 +19,11 @@ from fastapi.templating import Jinja2Templates
 from .config_store import ConfigStore, mask_domain
 from .schemas import AIConfig, AppConfig, BrandTrainingSample, DomainConfig, SystemConfig
 
-store = ConfigStore(path=Path("data/app_config.json"))
-templates = Jinja2Templates(directory="services/web/app/templates")
+BASE_DIR = Path(__file__).resolve().parent
+SERVICE_DIR = BASE_DIR.parent
+
+store = ConfigStore(path=SERVICE_DIR / "data" / "app_config.json")
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 SESSION_COOKIE_NAME = "nodeseek_admin_session"
 SESSION_SECRET = secrets.token_hex(32)
 DEFAULT_PASSWORD = "123456"
