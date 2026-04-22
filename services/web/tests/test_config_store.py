@@ -1,9 +1,10 @@
 from pathlib import Path
 
+import httpx
 from fastapi.testclient import TestClient
 
 from app.config_store import ConfigStore, mask_domain
-from app.main import _build_chat_completions_url, _is_trade_entry, app
+from app.main import _build_chat_completions_url, _format_exception, _is_trade_entry, _should_retry_exception, app
 from app.schemas import AIConfig, AppConfig
 
 
@@ -68,3 +69,19 @@ def test_ai_config_supports_extended_timeout_and_retries():
     assert cfg.timeout_seconds == 3600
     assert cfg.max_retries == 3
     assert cfg.retry_delay_seconds == 5
+
+
+def test_should_retry_exception_for_524():
+    request = httpx.Request("POST", "https://llm.428048.xyz/v1/chat/completions")
+    response = httpx.Response(524, request=request, text="timeout")
+    exc = httpx.HTTPStatusError("524 timeout", request=request, response=response)
+    assert _should_retry_exception(exc)
+
+
+def test_format_exception_for_524_contains_guidance():
+    request = httpx.Request("POST", "https://llm.428048.xyz/v1/chat/completions")
+    response = httpx.Response(524, request=request, text="timeout")
+    exc = httpx.HTTPStatusError("524 timeout", request=request, response=response)
+    message = _format_exception(exc)
+    assert "HTTP 524" in message
+    assert "上游响应超时" in message

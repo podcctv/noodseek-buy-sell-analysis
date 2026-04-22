@@ -42,6 +42,7 @@ class RuntimeState:
 
 
 runtime = RuntimeState()
+RETRYABLE_HTTP_STATUS_CODES = {408, 409, 423, 425, 429, 500, 502, 503, 504, 520, 522, 524}
 
 
 async def _poll_loop() -> None:
@@ -176,7 +177,10 @@ def _entry_uid(entry: dict[str, str]) -> str:
 
 
 async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any]:
-    ai = await _classify_with_ai(entry, cfg.ai)
+    try:
+        ai = await _classify_with_ai(entry, cfg.ai)
+    except Exception:
+        ai = None
     if not ai:
         ai = _rule_classify(entry, cfg)
 
@@ -233,10 +237,10 @@ async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str
             break
         except Exception as exc:  # noqa: BLE001
             last_error = exc
-            if attempt >= max_attempts:
+            if attempt >= max_attempts or not _should_retry_exception(exc):
                 raise
             if ai_cfg.retry_delay_seconds > 0:
-                await asyncio.sleep(ai_cfg.retry_delay_seconds)
+                await asyncio.sleep(ai_cfg.retry_delay_seconds * attempt)
 
     if data is None and last_error is not None:
         raise last_error
@@ -300,6 +304,16 @@ def _build_chat_completions_url(ai_cfg: AIConfig) -> str:
     return f"{base}{normalized_path}"
 
 
+def _should_retry_exception(exc: Exception) -> bool:
+    if isinstance(exc, httpx.TimeoutException):
+        return True
+    if isinstance(exc, httpx.NetworkError):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in RETRYABLE_HTTP_STATUS_CODES
+    return False
+
+
 def _format_exception(exc: Exception) -> str:
     detail = str(exc).strip()
     if not detail:
@@ -311,6 +325,8 @@ def _format_exception(exc: Exception) -> str:
         if response_text:
             compact_text = re.sub(r"\s+", " ", response_text)
             detail = f"{detail} | response: {compact_text[:200]}"
+        if status_code == 524:
+            return f"HTTP {status_code} - 上游响应超时，建议增大 timeout/retries 或更换更快模型。{detail}"
         return f"HTTP {status_code} - {detail}"
 
     return detail
