@@ -37,6 +37,7 @@ class RuntimeState:
         self.running: bool = False
         self.last_fetch_at: str | None = None
         self.last_error: str | None = None
+        self.cancelled_uids: set[str] = set()
         self.lock = asyncio.Lock()
 
 
@@ -63,6 +64,10 @@ async def _poll_once(cfg: AppConfig) -> None:
             async with runtime.lock:
                 if uid in runtime.post_index:
                     continue
+                if uid in runtime.cancelled_uids:
+                    runtime.post_index.add(uid)
+                    runtime.cancelled_uids.discard(uid)
+                    continue
                 progress = {
                     "uid": uid,
                     "title": entry.get("title", ""),
@@ -74,9 +79,33 @@ async def _poll_once(cfg: AppConfig) -> None:
                 runtime.progress_items.insert(0, progress)
                 runtime.progress_items = runtime.progress_items[:100]
 
-            analyzed = await _analyze_entry(entry, cfg)
+            async with runtime.lock:
+                if uid in runtime.cancelled_uids:
+                    progress["status"] = "cancelled"
+                    progress["message"] = "已取消"
+                    progress["finished_at"] = _now_iso()
+                    runtime.post_index.add(uid)
+                    runtime.cancelled_uids.discard(uid)
+                    continue
+
+            try:
+                analyzed = await _analyze_entry(entry, cfg)
+            except Exception as exc:  # noqa: BLE001
+                async with runtime.lock:
+                    runtime.post_index.add(uid)
+                    progress["status"] = "failed"
+                    progress["message"] = f"失败：{exc}"
+                    progress["finished_at"] = _now_iso()
+                continue
 
             async with runtime.lock:
+                if uid in runtime.cancelled_uids:
+                    progress["status"] = "cancelled"
+                    progress["message"] = "已取消"
+                    progress["finished_at"] = _now_iso()
+                    runtime.post_index.add(uid)
+                    runtime.cancelled_uids.discard(uid)
+                    continue
                 runtime.post_index.add(uid)
                 runtime.posts.insert(0, analyzed)
                 runtime.posts = runtime.posts[:300]
@@ -132,13 +161,8 @@ async def _fetch_rss_entries(rss_url: str, timeout_seconds: int) -> list[dict[st
 
 
 def _is_trade_entry(title: str, link: str, description: str, categories: list[str]) -> bool:
-    normalized_categories = [c.lower() for c in categories]
-    if any("trade" in c or "交易" in c for c in normalized_categories):
-        return True
-
-    source = f"{title} {description} {link}".lower()
-    trade_keywords = ["求购", "出售", "转让", "闲置", "trade", "buy", "sell", "交易"]
-    return any(k in source for k in trade_keywords)
+    normalized_categories = {c.strip().lower() for c in categories}
+    return "trade" in normalized_categories
 
 
 def _clean_text(value: str) -> str:
@@ -388,6 +412,19 @@ async def progress_data() -> dict[str, Any]:
             "last_error": runtime.last_error,
             "items": list(runtime.progress_items[:20]),
         }
+
+
+@app.post("/api/v1/progress/{uid}/cancel")
+async def cancel_progress(uid: str) -> dict[str, str]:
+    async with runtime.lock:
+        runtime.cancelled_uids.add(uid)
+        for item in runtime.progress_items:
+            if item.get("uid") == uid and item.get("status") == "running":
+                item["status"] = "cancelled"
+                item["message"] = "已取消"
+                item["finished_at"] = _now_iso()
+                break
+    return {"ok": "true"}
 
 
 @app.post("/api/v1/poll-now")
