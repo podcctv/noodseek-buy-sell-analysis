@@ -28,12 +28,7 @@ class AIConfig(BaseModel):
     chat_completions_path: str = "/chat/completions"
     request_method: str = "POST"
     auth_mode: str = "none"
-    custom_headers: dict[str, str] = Field(
-        default_factory=lambda: {
-            "Content-Type": "application/json",
-            "X-Ollama-Token": "df8b17534c1617cb66a7146cc1b544e5d59637764a2aff86",
-        }
-    )
+    custom_headers: dict[str, str] = Field(default_factory=lambda: {"Content-Type": "application/json"})
 
 
 class SystemConfig(BaseModel):

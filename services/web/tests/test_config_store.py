@@ -4,7 +4,7 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.config_store import ConfigStore, mask_domain
-from app.main import _build_chat_completions_url, _format_exception, _is_trade_entry, _should_retry_exception, app
+from app.main import _build_chat_completions_url, _format_exception, _is_trade_entry, _load_runtime_config, _should_retry_exception, app
 from app.schemas import AIConfig, AppConfig
 
 
@@ -69,6 +69,16 @@ def test_ai_config_supports_extended_timeout_and_retries():
     assert cfg.timeout_seconds == 3600
     assert cfg.max_retries == 3
     assert cfg.retry_delay_seconds == 5
+
+
+def test_runtime_config_can_be_overridden_by_env(monkeypatch):
+    monkeypatch.setenv("NDS_LLM_BASE_URL", "https://example.com/v1")
+    monkeypatch.setenv("NDS_LLM_API_KEY", "secret-token")
+    monkeypatch.setenv("NDS_LLM_CUSTOM_HEADERS_JSON", '{"Content-Type":"application/json","X-Test":"1"}')
+    cfg = _load_runtime_config()
+    assert str(cfg.ai.base_url).startswith("https://example.com/v1")
+    assert cfg.ai.api_key.get_secret_value() == "secret-token"
+    assert cfg.ai.custom_headers["X-Test"] == "1"
 
 
 def test_should_retry_exception_for_524():
