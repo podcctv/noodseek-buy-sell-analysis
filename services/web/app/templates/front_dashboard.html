@@ -81,7 +81,7 @@
           </div>
           <table>
             <thead>
-              <tr><th>发布时间</th><th>标题</th><th>意图</th><th>价格</th><th>置信度</th></tr>
+              <tr><th>发布时间</th><th>标题</th><th>商品名称</th><th>意图</th><th>价格</th><th>置信度</th></tr>
             </thead>
             <tbody id="postRows"></tbody>
           </table>
@@ -114,6 +114,7 @@
           <tr>
             <td>${p.time || "-"}</td>
             <td>${p.link ? `<a href="${p.link}" target="_blank">${p.title}</a>` : p.title}</td>
+            <td>${p.product_name || "-"}</td>
             <td><span class="badge ${p.intent}">${toIntentLabel(p.intent)}</span></td>
             <td>${p.price || "-"}</td>
             <td>${(Number(p.confidence || 0) * 100).toFixed(0)}%</td>
