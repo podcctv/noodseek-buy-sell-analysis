@@ -7,6 +7,13 @@
 - AI 配置（provider/base_url/path/method/auth/headers/api_key/model/timeout）
 - 系统配置（置信度阈值、RSS 拉取间隔、时区）
 - 实时 RSS 抓取 + AI 分类 + 进度展示
+- 默认仅保留交易相关帖子（trade/交易/求购/出售等关键词）
+
+## LLM 接口兼容说明
+
+- 支持 OpenAI 兼容 `POST` + JSON body。
+- 当 `Base URL` 已经填写完整的 `/chat/completions` 时，系统会自动避免重复拼接路径。
+- 可通过自定义 Headers 配置 `X-Ollama-Token` 等认证头。
 
 ## 启动
 
