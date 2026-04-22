@@ -24,13 +24,30 @@
         background: var(--bg);
         color: var(--text);
       }
-      .container { max-width: 1240px; margin: 28px auto; padding: 0 18px 36px; }
-      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 14px; }
+      .container { width: min(1500px, 100% - 24px); margin: 20px auto; padding: 0 6px 24px; }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 14px; flex-wrap: wrap; }
       .title { margin: 0; font-size: 38px; font-weight: 800; letter-spacing: 0.2px; }
       .tip { color: var(--muted); margin: 8px 0 0; font-size: 15px; }
-      .btn { display: inline-flex; align-items: center; justify-content: center; background: var(--brand); color: #fff; text-decoration: none; border-radius: 10px; padding: 11px 15px; font-weight: 700; border: 0; cursor: pointer; box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22); transition: all .2s ease; }
-      .btn:hover { transform: translateY(-1px); background: var(--brand-dark); }
-      .btn-ghost { background: #fff; color: var(--brand); border: 1px solid #bfdbfe; box-shadow: none; }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 42px;
+        padding: 0 16px;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1;
+        border-radius: 10px;
+        border: 1px solid var(--brand);
+        background: var(--brand);
+        color: #fff;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all .2s ease;
+      }
+      .btn:hover { background: var(--brand-dark); border-color: var(--brand-dark); transform: translateY(-1px); }
+      .btn-ghost { background: #fff; color: var(--brand); border: 1px solid #93c5fd; }
+      .btn-ghost:hover { color: #fff; }
       .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
       .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px; }
       .card {
@@ -43,16 +60,27 @@
       .metric-title { color: var(--muted); font-size: 13px; margin: 0 0 8px; font-weight: 600; }
       .metric-val { margin: 0; font-size: 34px; font-weight: 800; }
       .metric-sub { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
-      .row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 14px; }
+      .row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 14px; align-items: stretch; }
       @media (max-width: 960px) {
         .row { grid-template-columns: 1fr; }
         .title { font-size: 30px; }
       }
       .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-      .chip { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 11px; cursor: pointer; font-size: 13px; font-weight: 600; }
+      .chip {
+        border: 1px solid #cbd5e1;
+        background: #fff;
+        border-radius: 999px;
+        min-height: 34px;
+        padding: 0 12px;
+        cursor: pointer;
+        font-size: 14px;
+        font-weight: 700;
+        transition: all .2s ease;
+      }
+      .chip:hover { border-color: var(--brand); color: var(--brand); background: #eff6ff; }
       .chip.active { border-color: var(--brand); background: #eff6ff; color: var(--brand); }
-      .table-wrap { overflow-x: auto; }
-      table { width: 100%; border-collapse: collapse; min-width: 860px; }
+      .table-wrap { width: 100%; overflow-x: hidden; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
       th, td {
         text-align: left;
         border-bottom: 1px solid var(--border);
@@ -62,9 +90,19 @@
         line-height: 1.45;
         word-break: keep-all;
       }
-      td.title-col { min-width: 260px; }
-      td.brand-col { white-space: nowrap; min-width: 90px; }
-      td.price-col, td.conf-col { white-space: nowrap; }
+      th.time-col, td.time-col,
+      th.brand-col, td.brand-col,
+      th.price-col, td.price-col,
+      th.conf-col, td.conf-col,
+      th.manage-col, td.manage-col { white-space: nowrap; }
+      th.time-col, td.time-col { width: 168px; }
+      th.type-col, td.type-col { width: 74px; }
+      th.brand-col, td.brand-col { width: 94px; }
+      th.price-col, td.price-col { width: 72px; }
+      th.conf-col, td.conf-col { width: 66px; }
+      th.manage-col, td.manage-col { width: 66px; }
+      td.title-col { width: 34%; }
+      td.prod-col { width: 28%; word-break: break-word; }
       .badge { display: inline-block; border-radius: 999px; padding: 3px 9px; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
       .buy { background: var(--ok); }
       .sell { background: var(--warn); }
@@ -80,8 +118,28 @@
       }
       .list li span:first-child { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
       .small { color: var(--muted); font-size: 12px; white-space: nowrap; }
-      .btn-mini { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 6px; font-size: 12px; padding: 2px 6px; cursor: pointer; }
+      .btn-mini {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 30px;
+        padding: 0 10px;
+        border-radius: 8px;
+        border: 1px solid #93c5fd;
+        background: #fff;
+        color: var(--brand);
+        font-size: 13px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: all .2s ease;
+      }
+      .btn-mini:hover { background: var(--brand); color: #fff; border-color: var(--brand); }
       .explain { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+      @media (max-width: 1280px) {
+        .container { width: calc(100% - 18px); }
+        th, td { padding: 9px 6px; font-size: 13px; }
+        th.time-col, td.time-col { width: 156px; }
+      }
     </style>
   </head>
   <body>
@@ -117,7 +175,7 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th>类型</th><th>发布时间</th><th>标题</th><th>品牌</th><th>商品名称 | 配置</th><th>价格</th><th>置信度</th><th id="adminActionHead" style="display:none;">管理</th></tr>
+                <tr><th class="type-col">类型</th><th class="time-col">发布时间</th><th>标题</th><th class="brand-col">品牌</th><th>商品名称 | 配置</th><th class="price-col">价格</th><th class="conf-col">置信度</th><th class="manage-col" id="adminActionHead" style="display:none;">管理</th></tr>
               </thead>
               <tbody id="postRows"></tbody>
             </table>
@@ -153,14 +211,14 @@
         const current = currentFilter === "all" ? posts : posts.filter((p) => p.intent === currentFilter);
         rows.innerHTML = current.map((p) => `
           <tr>
-            <td><span class="badge ${p.intent}">${toIntentLabel(p.intent)}</span></td>
-            <td>${formatToUtc8(p.time)}</td>
+            <td class="type-col"><span class="badge ${p.intent}">${toIntentLabel(p.intent)}</span></td>
+            <td class="time-col">${formatToUtc8(p.time)}</td>
             <td class="title-col">${p.link ? `<a href="${p.link}" target="_blank">${p.title}</a>` : p.title}</td>
             <td class="brand-col">${p.brand || "未知"}</td>
-            <td>${[p.product_name || "-", p.product_config || "-"].join(" | ")}</td>
+            <td class="prod-col">${[p.product_name || "-", p.product_config || "-"].join(" | ")}</td>
             <td class="price-col">${p.price || "-"}</td>
             <td class="conf-col">${(Number(p.confidence || 0) * 100).toFixed(0)}%</td>
-            ${isAdmin ? `<td><a class="btn-mini" href="${buildEditUrl(p)}">编辑</a></td>` : ""}
+            ${isAdmin ? `<td class="manage-col"><a class="btn-mini" href="${buildEditUrl(p)}">编辑</a></td>` : ""}
           </tr>`).join("");
       }
 

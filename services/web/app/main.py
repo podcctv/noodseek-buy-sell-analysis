@@ -23,6 +23,7 @@ from .schemas import AIConfig, AppConfig, BrandTrainingSample, DomainConfig, Pos
 
 BASE_DIR = Path(__file__).resolve().parent
 SERVICE_DIR = BASE_DIR.parent
+RUNTIME_POSTS_PATH = SERVICE_DIR / "data" / "runtime_posts.json"
 
 store = ConfigStore(path=SERVICE_DIR / "data" / "app_config.json")
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
@@ -56,6 +57,28 @@ DEFAULT_SCRAPE_HEADERS = {
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
+
+
+def _load_runtime_posts() -> list[dict[str, Any]]:
+    if not RUNTIME_POSTS_PATH.exists():
+        return []
+    try:
+        data = json.loads(RUNTIME_POSTS_PATH.read_text(encoding="utf-8"))
+    except Exception:  # noqa: BLE001
+        return []
+    if not isinstance(data, list):
+        return []
+    loaded: list[dict[str, Any]] = []
+    for item in data[:300]:
+        if isinstance(item, dict) and item.get("uid"):
+            loaded.append(item)
+    return loaded
+
+
+def _save_runtime_posts(posts: list[dict[str, Any]]) -> None:
+    RUNTIME_POSTS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(posts[:300], ensure_ascii=False, indent=2)
+    RUNTIME_POSTS_PATH.write_text(payload, encoding="utf-8")
 
 
 def _apply_env_overrides(cfg: AppConfig) -> AppConfig:
@@ -158,6 +181,7 @@ async def _poll_once(cfg: AppConfig) -> None:
                 runtime.post_index.add(uid)
                 runtime.posts.insert(0, analyzed)
                 runtime.posts = runtime.posts[:300]
+                _save_runtime_posts(runtime.posts)
                 progress["status"] = "done"
                 progress["message"] = f"完成：{analyzed['intent']} ({int(analyzed['confidence'] * 100)}%)"
                 progress["finished_at"] = _now_iso()
@@ -614,6 +638,10 @@ def _now_iso() -> str:
 @app.on_event("startup")
 async def startup_polling() -> None:
     _bootstrap_default_password()
+    loaded_posts = _load_runtime_posts()
+    async with runtime.lock:
+        runtime.posts = loaded_posts
+        runtime.post_index = {str(item.get("uid")) for item in loaded_posts if item.get("uid")}
     asyncio.create_task(_poll_loop())
 
 
@@ -769,6 +797,7 @@ async def retry_progress(uid: str) -> dict[str, str]:
         runtime.posts = [post for post in runtime.posts if post.get("uid") != uid]
         runtime.posts.insert(0, analyzed)
         runtime.posts = runtime.posts[:300]
+        _save_runtime_posts(runtime.posts)
         progress["status"] = "done"
         progress["message"] = f"重试完成：{analyzed['intent']} ({int(analyzed['confidence'] * 100)}%)"
         progress["finished_at"] = _now_iso()
@@ -1006,6 +1035,7 @@ def post_edit_save(
     for idx, item in enumerate(runtime.posts):
         if item.get("uid") == uid:
             runtime.posts[idx] = patched
+            _save_runtime_posts(runtime.posts)
             break
 
     if auto_training:
