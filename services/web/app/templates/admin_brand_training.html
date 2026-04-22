@@ -24,21 +24,25 @@
       <a class="btn-link" href="/">进入展示页面</a>
     </div>
     {% if saved %}<p class="ok">保存成功 ✅</p>{% endif %}
+    {% if prefill.source_title %}
+      <p class="ok">正在基于帖子创建训练样本：{{ prefill.source_title }}</p>
+      {% if prefill.source_link %}<p><a href="{{ prefill.source_link }}" target="_blank">查看原帖</a></p>{% endif %}
+    {% endif %}
 
     <section class="card">
       <h2>添加人工标注样本</h2>
       <form class="grid" method="post" action="/admin/brand-training/add">
         <label>品牌</label>
-        <input name="brand" required />
+        <input name="brand" value="{{ prefill.brand }}" required />
 
         <label>商品名称</label>
-        <input name="product_name" placeholder="如：AirPods Pro 2" />
+        <input name="product_name" value="{{ prefill.product_name }}" placeholder="如：AirPods Pro 2" />
 
         <label>关键词（逗号/换行分隔）</label>
-        <textarea name="keywords" rows="3" placeholder="airpods, 苹果耳机"></textarea>
+        <textarea name="keywords" rows="3" placeholder="airpods, 苹果耳机">{{ prefill.keywords }}</textarea>
 
         <label>备注</label>
-        <textarea name="note" rows="2"></textarea>
+        <textarea name="note" rows="2">{{ prefill.note }}</textarea>
 
         <button type="submit">保存样本</button>
       </form>

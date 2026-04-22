@@ -454,7 +454,7 @@ def index(request: Request):
 
 
 @app.get("/api/v1/dashboard")
-async def dashboard_data() -> dict[str, Any]:
+async def dashboard_data(request: Request) -> dict[str, Any]:
     async with runtime.lock:
         posts = list(runtime.posts)
 
@@ -481,6 +481,7 @@ async def dashboard_data() -> dict[str, Any]:
         },
         "posts": posts[:100],
         "hot_words": hot_words,
+        "is_admin": _is_authed(request),
     }
 
 
@@ -645,12 +646,21 @@ def brand_training_page(request: Request):
     if redirect:
         return redirect
     cfg = store.load()
+    prefill = {
+        "brand": request.query_params.get("brand", ""),
+        "product_name": request.query_params.get("product_name", ""),
+        "keywords": request.query_params.get("keywords", ""),
+        "note": request.query_params.get("note", ""),
+        "source_title": request.query_params.get("source_title", ""),
+        "source_link": request.query_params.get("source_link", ""),
+    }
     return templates.TemplateResponse(
         request,
         "admin_brand_training.html",
         {
             "samples": cfg.training.brand_samples,
             "saved": request.query_params.get("saved") == "1",
+            "prefill": prefill,
         },
     )
 
