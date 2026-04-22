@@ -10,7 +10,7 @@
       .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
       .grid { display: grid; gap: 8px; }
       label { font-weight: 600; font-size: 14px; }
-      input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+      input, textarea { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
       button { padding: 8px 12px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
       .tip { color: #475569; font-size: 13px; }
       .ok { color: #166534; font-weight: 600; }
@@ -19,6 +19,9 @@
   <body>
     <h1>NodeSeek 后端配置中心</h1>
     <p class="tip">统一在后台页面管理域名隐私、AI 参数、系统运行配置。</p>
+    <form method="post" action="/admin/logout" style="margin-bottom: 16px;">
+      <button type="submit">退出登录</button>
+    </form>
     {% if saved %}<p class="ok">保存成功 ✅</p>{% endif %}
 
     <section class="card">
@@ -49,8 +52,21 @@
         <label>Base URL</label>
         <input name="base_url" value="{{ config.ai.base_url }}" required />
 
+        <label>Chat Completions Path</label>
+        <input name="chat_completions_path" value="{{ config.ai.chat_completions_path }}" required />
+
+        <label>HTTP Method</label>
+        <input name="request_method" value="{{ config.ai.request_method }}" required />
+
+        <label>Authentication</label>
+        <input name="auth_mode" value="{{ config.ai.auth_mode }}" required />
+
         <label>API Key</label>
         <input name="api_key" value="{{ config.ai.api_key.get_secret_value() }}" />
+
+        <label>自定义 Headers（每行 Name: Value）</label>
+        <textarea name="custom_headers_text" rows="4">{% for k, v in config.ai.custom_headers.items() %}{{ k }}: {{ v }}
+{% endfor %}</textarea>
 
         <label>Model</label>
         <input name="model" value="{{ config.ai.model }}" required />

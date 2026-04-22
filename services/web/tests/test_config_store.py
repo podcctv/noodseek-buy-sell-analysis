@@ -29,4 +29,11 @@ def test_api_config_endpoint():
     resp = client.get("/api/v1/config")
     assert resp.status_code == 200
     body = resp.json()
-    assert "domain" in body and "ai" in body and "system" in body
+    assert "domain" in body and "ai" in body and "system" in body and "auth" in body
+
+
+def test_admin_settings_requires_login():
+    client = TestClient(app)
+    resp = client.get("/admin/settings", follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    assert resp.headers["location"] in ("/admin/login", "/admin/change-password")
