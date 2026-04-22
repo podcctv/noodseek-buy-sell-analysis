@@ -50,14 +50,14 @@ def test_build_chat_completions_url_avoids_duplicate_path():
 
 def test_trade_entry_filter():
     assert _is_trade_entry(
-        title="出一台 Mac mini M2",
+        title="分享一台 Mac mini M2",
         link="https://www.nodeseek.com/post-123",
-        description="闲置转让",
-        categories=[],
+        description="经验帖",
+        categories=["trade"],
     )
     assert not _is_trade_entry(
-        title="分享一个脚本技巧",
+        title="出一台 Mac mini M2",
         link="https://www.nodeseek.com/post-456",
-        description="开发经验",
+        description="闲置转让",
         categories=["编程"],
     )

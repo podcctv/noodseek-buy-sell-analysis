@@ -45,6 +45,9 @@
       .progress-item:last-child { border-bottom: 0; }
       .status-running { color: #2563eb; }
       .status-done { color: #16a34a; }
+      .status-failed { color: #dc2626; }
+      .status-cancelled { color: #64748b; }
+      .btn-mini { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 6px; font-size: 12px; padding: 2px 6px; cursor: pointer; }
     </style>
   </head>
   <body>
@@ -133,9 +136,18 @@
         const meta = document.getElementById("progressMeta");
         meta.textContent = `状态: ${data.running ? "抓取/分析中" : "空闲"} | 最近抓取: ${data.last_fetch_at || "-"}${data.last_error ? ` | 错误: ${data.last_error}` : ""}`;
         const list = document.getElementById("progressList");
+        const statusClass = {
+          running: "status-running",
+          done: "status-done",
+          failed: "status-failed",
+          cancelled: "status-cancelled",
+        };
         list.innerHTML = (data.items || []).map((item) => `
           <div class="progress-item">
-            <div class="small ${item.status === "running" ? "status-running" : "status-done"}">${item.status}</div>
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+              <div class="small ${statusClass[item.status] || ""}">${item.status}</div>
+              ${item.status === "running" ? `<button type="button" class="btn-mini" data-cancel-uid="${item.uid}">取消</button>` : ""}
+            </div>
             <div>${item.title || "-"}</div>
             <div class="small">${item.message || ""}</div>
           </div>
@@ -169,6 +181,15 @@
       document.getElementById("pollNowBtn").addEventListener("click", async () => {
         await fetch("/api/v1/poll-now", { method: "POST" });
         setTimeout(loadProgress, 300);
+      });
+
+      document.getElementById("progressList").addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const uid = target.dataset.cancelUid;
+        if (!uid) return;
+        await fetch(`/api/v1/progress/${uid}/cancel`, { method: "POST" });
+        await loadProgress();
       });
 
       async function tick() {
