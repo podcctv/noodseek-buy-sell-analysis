@@ -473,6 +473,46 @@ async def cancel_progress(uid: str) -> dict[str, str]:
     return {"ok": "true"}
 
 
+@app.post("/api/v1/progress/{uid}/retry")
+async def retry_progress(uid: str) -> dict[str, str]:
+    cfg = store.load()
+    entries = await _fetch_rss_entries(str(cfg.domain.rss_domain), cfg.ai.timeout_seconds)
+    target_entry = next((entry for entry in entries if _entry_uid(entry) == uid), None)
+    if not target_entry:
+        return {"ok": "false", "error": "entry_not_found"}
+
+    progress = {
+        "uid": uid,
+        "title": target_entry.get("title", ""),
+        "status": "running",
+        "message": "AI 重试处理中",
+        "started_at": _now_iso(),
+        "finished_at": None,
+    }
+    async with runtime.lock:
+        runtime.progress_items.insert(0, progress)
+        runtime.progress_items = runtime.progress_items[:100]
+
+    try:
+        analyzed = await _analyze_entry(target_entry, cfg)
+    except Exception as exc:  # noqa: BLE001
+        async with runtime.lock:
+            progress["status"] = "failed"
+            progress["message"] = f"重试失败：{_format_exception(exc)}"
+            progress["finished_at"] = _now_iso()
+        return {"ok": "false", "error": "retry_failed"}
+
+    async with runtime.lock:
+        runtime.post_index.add(uid)
+        runtime.posts = [post for post in runtime.posts if post.get("uid") != uid]
+        runtime.posts.insert(0, analyzed)
+        runtime.posts = runtime.posts[:300]
+        progress["status"] = "done"
+        progress["message"] = f"重试完成：{analyzed['intent']} ({int(analyzed['confidence'] * 100)}%)"
+        progress["finished_at"] = _now_iso()
+    return {"ok": "true"}
+
+
 @app.post("/api/v1/poll-now")
 async def poll_now() -> dict[str, str]:
     cfg = store.load()
