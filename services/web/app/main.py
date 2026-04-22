@@ -94,7 +94,7 @@ async def _poll_once(cfg: AppConfig) -> None:
                 async with runtime.lock:
                     runtime.post_index.add(uid)
                     progress["status"] = "failed"
-                    progress["message"] = f"失败：{exc}"
+                    progress["message"] = f"失败：{_format_exception(exc)}"
                     progress["finished_at"] = _now_iso()
                 continue
 
@@ -118,7 +118,7 @@ async def _poll_once(cfg: AppConfig) -> None:
             runtime.last_error = None
     except Exception as exc:  # noqa: BLE001
         async with runtime.lock:
-            runtime.last_error = str(exc)
+            runtime.last_error = _format_exception(exc)
     finally:
         async with runtime.lock:
             runtime.running = False
@@ -277,6 +277,22 @@ def _build_chat_completions_url(ai_cfg: AIConfig) -> str:
     if base.endswith("/chat/completions") and normalized_path == "/chat/completions":
         return base
     return f"{base}{normalized_path}"
+
+
+def _format_exception(exc: Exception) -> str:
+    detail = str(exc).strip()
+    if not detail:
+        detail = exc.__class__.__name__
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        status_code = exc.response.status_code
+        response_text = (exc.response.text or "").strip()
+        if response_text:
+            compact_text = re.sub(r"\s+", " ", response_text)
+            detail = f"{detail} | response: {compact_text[:200]}"
+        return f"HTTP {status_code} - {detail}"
+
+    return detail
 
 
 def _rule_classify(entry: dict[str, str]) -> dict[str, Any]:
