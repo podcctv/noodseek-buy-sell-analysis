@@ -3,8 +3,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from app.config_store import ConfigStore, mask_domain
-from app.main import app
-from app.schemas import AppConfig
+from app.main import _build_chat_completions_url, _is_trade_entry, app
+from app.schemas import AIConfig, AppConfig
 
 
 def test_mask_domain():
@@ -37,3 +37,27 @@ def test_admin_settings_requires_login():
     resp = client.get("/admin/settings", follow_redirects=False)
     assert resp.status_code in (302, 303)
     assert resp.headers["location"] in ("/admin/login", "/admin/change-password")
+
+
+def test_build_chat_completions_url_avoids_duplicate_path():
+    cfg = AIConfig(
+        base_url="https://llm.428048.xyz/v1/chat/completions",
+        chat_completions_path="/chat/completions",
+        model="test-model",
+    )
+    assert _build_chat_completions_url(cfg) == "https://llm.428048.xyz/v1/chat/completions"
+
+
+def test_trade_entry_filter():
+    assert _is_trade_entry(
+        title="出一台 Mac mini M2",
+        link="https://www.nodeseek.com/post-123",
+        description="闲置转让",
+        categories=[],
+    )
+    assert not _is_trade_entry(
+        title="分享一个脚本技巧",
+        link="https://www.nodeseek.com/post-456",
+        description="开发经验",
+        categories=["编程"],
+    )

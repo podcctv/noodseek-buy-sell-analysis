@@ -114,7 +114,10 @@ async def _fetch_rss_entries(rss_url: str, timeout_seconds: int) -> list[dict[st
         guid = _clean_text(item.findtext("guid", default=""))
         pub_date = _clean_text(item.findtext("pubDate", default=""))
         desc = _clean_text(item.findtext("description", default=""))
+        categories = [_clean_text(c.text or "") for c in item.findall("category") if _clean_text(c.text or "")]
         if not title:
+            continue
+        if not _is_trade_entry(title=title, link=link, description=desc, categories=categories):
             continue
         entries.append(
             {
@@ -126,6 +129,16 @@ async def _fetch_rss_entries(rss_url: str, timeout_seconds: int) -> list[dict[st
             }
         )
     return entries
+
+
+def _is_trade_entry(title: str, link: str, description: str, categories: list[str]) -> bool:
+    normalized_categories = [c.lower() for c in categories]
+    if any("trade" in c or "交易" in c for c in normalized_categories):
+        return True
+
+    source = f"{title} {description} {link}".lower()
+    trade_keywords = ["求购", "出售", "转让", "闲置", "trade", "buy", "sell", "交易"]
+    return any(k in source for k in trade_keywords)
 
 
 def _clean_text(value: str) -> str:
@@ -177,7 +190,7 @@ async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str
     if ai_cfg.auth_mode == "bearer" and api_key:
         headers["Authorization"] = f"Bearer {api_key}"
 
-    url = f"{str(ai_cfg.base_url).rstrip('/')}{ai_cfg.chat_completions_path}"
+    url = _build_chat_completions_url(ai_cfg)
 
     async with httpx.AsyncClient(timeout=ai_cfg.timeout_seconds) as client:
         response = await client.request(ai_cfg.request_method.upper(), url, headers=headers, json=payload)
@@ -225,6 +238,21 @@ def _extract_json(raw: str) -> Any:
         return json.loads(m.group(0))
     except json.JSONDecodeError:
         return None
+
+
+def _build_chat_completions_url(ai_cfg: AIConfig) -> str:
+    base = str(ai_cfg.base_url).rstrip("/")
+    path = (ai_cfg.chat_completions_path or "").strip()
+
+    if not path or path == "/":
+        return base
+    if path.startswith("http://") or path.startswith("https://"):
+        return path
+
+    normalized_path = path if path.startswith("/") else f"/{path}"
+    if base.endswith("/chat/completions") and normalized_path == "/chat/completions":
+        return base
+    return f"{base}{normalized_path}"
 
 
 def _rule_classify(entry: dict[str, str]) -> dict[str, Any]:
