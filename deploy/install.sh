@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.0.0"
-REPO_SLUG="${REPO_SLUG:-your-org/noodseek-buy-sell-analysis}"
+SCRIPT_VERSION="1.0.1"
+REPO_SLUG_DEFAULT="your-org/noodseek-buy-sell-analysis"
+REPO_SLUG_RAW="${REPO_SLUG:-$REPO_SLUG_DEFAULT}"
+REPO_SLUG="${REPO_SLUG_RAW#/}"
+REPO_SLUG="${REPO_SLUG%/}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/noodseek-buy-sell-analysis}"
 IMAGE_REPO_DEFAULT="ghcr.io/${REPO_SLUG,,}"
 IMAGE_TAG_DEFAULT="latest"
@@ -12,6 +15,11 @@ SCRIPT_PATH="${SCRIPT_PATH:-}"
 log() {
   echo "[nodeseek-installer] $*"
 }
+
+if [[ -z "${REPO_SLUG}" ]]; then
+  log "REPO_SLUG 不能为空（示例: your-org/noodseek-buy-sell-analysis）"
+  exit 1
+fi
 
 require_cmd() {
   local cmd="$1"
