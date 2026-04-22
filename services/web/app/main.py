@@ -48,6 +48,14 @@ class RuntimeState:
 
 runtime = RuntimeState()
 RETRYABLE_HTTP_STATUS_CODES = {408, 409, 423, 425, 429, 500, 502, 503, 504, 520, 522, 524}
+DEFAULT_SCRAPE_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+}
 
 
 def _apply_env_overrides(cfg: AppConfig) -> AppConfig:
@@ -206,12 +214,22 @@ async def _fetch_post_content(link: str, timeout_seconds: int) -> str:
         return ""
     timeout = max(5, min(120, timeout_seconds))
     async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-        resp = await client.get(link)
+        resp = await client.get(link, headers=DEFAULT_SCRAPE_HEADERS)
         resp.raise_for_status()
         html = resp.text or ""
+    text = _extract_text_from_html(html)
+    if len(text) >= 120:
+        return text[:3000]
+
+    browser_text = await _fetch_post_content_with_browser(link=link, timeout_seconds=timeout)
+    if browser_text:
+        return browser_text[:3000]
+    return text[:3000]
+
+
+def _extract_text_from_html(html: str) -> str:
     if not html:
         return ""
-
     block_match = re.search(
         r"<(article|main)[^>]*>(.*?)</(article|main)>",
         html,
@@ -223,7 +241,31 @@ async def _fetch_post_content(link: str, timeout_seconds: int) -> str:
     text = re.sub(r"<[^>]+>", " ", text)
     text = re.sub(r"&nbsp;|&#160;", " ", text, flags=re.IGNORECASE)
     text = re.sub(r"&amp;", "&", text, flags=re.IGNORECASE)
-    return _clean_text(text)[:3000]
+    return _clean_text(text)
+
+
+async def _fetch_post_content_with_browser(link: str, timeout_seconds: int) -> str:
+    try:
+        from playwright.async_api import async_playwright
+    except Exception:  # noqa: BLE001
+        return ""
+
+    timeout_ms = int(max(5, min(120, timeout_seconds)) * 1000)
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page(user_agent=DEFAULT_SCRAPE_HEADERS["User-Agent"])
+            await page.goto(link, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=min(timeout_ms, 7000))
+            except Exception:  # noqa: BLE001
+                pass
+            html = await page.content()
+            text = _extract_text_from_html(html)
+            await browser.close()
+            return text
+    except Exception:  # noqa: BLE001
+        return ""
 
 
 def _is_trade_entry(title: str, link: str, description: str, categories: list[str]) -> bool:

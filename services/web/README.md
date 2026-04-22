@@ -20,8 +20,11 @@
 ```bash
 cd services/web
 pip install -r requirements.txt
+python -m playwright install chromium
 uvicorn app.main:app --reload --port 8080
 ```
+
+> 如果目标站点启用了较强的反爬策略，系统会在普通 HTTP 抓取正文不足时自动回退到无头浏览器（Playwright）渲染后再提取正文。
 
 访问：
 

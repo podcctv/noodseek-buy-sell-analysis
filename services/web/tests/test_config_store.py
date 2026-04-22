@@ -4,7 +4,16 @@ import httpx
 from fastapi.testclient import TestClient
 
 from app.config_store import ConfigStore, mask_domain
-from app.main import _build_chat_completions_url, _format_exception, _is_trade_entry, _load_runtime_config, _should_retry_exception, app
+from app.main import (
+    _build_chat_completions_url,
+    _extract_text_from_html,
+    _fetch_post_content_with_browser,
+    _format_exception,
+    _is_trade_entry,
+    _load_runtime_config,
+    _should_retry_exception,
+    app,
+)
 from app.schemas import AIConfig, AppConfig
 
 
@@ -95,3 +104,36 @@ def test_format_exception_for_524_contains_guidance():
     message = _format_exception(exc)
     assert "HTTP 524" in message
     assert "上游响应超时" in message
+
+
+def test_extract_text_from_html_prefers_article():
+    html = """
+    <html>
+      <body>
+        <article>
+          <h1>标题</h1>
+          <p>这是正文内容</p>
+        </article>
+        <footer>页脚内容</footer>
+      </body>
+    </html>
+    """
+    text = _extract_text_from_html(html)
+    assert "这是正文内容" in text
+    assert "页脚内容" not in text
+
+
+def test_browser_fetch_returns_empty_when_playwright_unavailable(monkeypatch):
+    import builtins
+    import asyncio
+
+    real_import = builtins.__import__
+
+    def fake_import(name, globals=None, locals=None, fromlist=(), level=0):  # type: ignore[no-untyped-def]
+        if name.startswith("playwright"):
+            raise ModuleNotFoundError("playwright not installed")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr(builtins, "__import__", fake_import)
+    text = asyncio.run(_fetch_post_content_with_browser("https://example.com", 5))
+    assert text == ""
