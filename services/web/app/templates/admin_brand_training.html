@@ -38,6 +38,9 @@
         <label>商品名称</label>
         <input name="product_name" value="{{ prefill.product_name }}" placeholder="如：AirPods Pro 2" />
 
+        <label>配置</label>
+        <input name="product_config" value="{{ prefill.product_config }}" placeholder="如：16G / 512G" />
+
         <label>关键词（逗号/换行分隔）</label>
         <textarea name="keywords" rows="3" placeholder="airpods, 苹果耳机">{{ prefill.keywords }}</textarea>
 
@@ -52,13 +55,14 @@
       <h2>已保存样本（{{ samples | length }}）</h2>
       <table>
         <thead>
-          <tr><th>品牌</th><th>商品名称</th><th>关键词</th><th>备注</th><th>操作</th></tr>
+          <tr><th>品牌</th><th>商品名称</th><th>配置</th><th>关键词</th><th>备注</th><th>操作</th></tr>
         </thead>
         <tbody>
           {% for s in samples %}
             <tr>
               <td>{{ s.brand }}</td>
               <td>{{ s.product_name }}</td>
+              <td>{{ s.product_config or "-" }}</td>
               <td>{{ "、".join(s.keywords) }}</td>
               <td>{{ s.note }}</td>
               <td>

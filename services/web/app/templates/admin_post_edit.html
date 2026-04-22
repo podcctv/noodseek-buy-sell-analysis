@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>编辑帖子识别结果</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; background: #f8fafc; color: #0f172a; }
+      .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .grid { display: grid; gap: 8px; }
+      label { font-weight: 600; font-size: 14px; }
+      input, textarea { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; }
+      button, .btn-link { display: inline-flex; align-items: center; justify-content: center; padding: 8px 12px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; text-decoration: none; font-weight: 600; }
+      .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+      .small { color: #475569; font-size: 13px; }
+      .ok { color: #166534; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>帖子字段编辑</h1>
+    <div class="btn-group">
+      <a class="btn-link" href="/">返回展示页</a>
+      <a class="btn-link" href="/admin/brand-training">查看训练样本</a>
+    </div>
+
+    {% if saved %}<p class="ok">保存成功：本帖会优先使用你编辑的品牌/商品/配置，并可自动写入 AI 参考库 ✅</p>{% endif %}
+
+    <section class="card">
+      <h2>原帖信息</h2>
+      <p><strong>标题：</strong>{{ post.title }}</p>
+      {% if post.link %}<p><a href="{{ post.link }}" target="_blank">打开原帖</a></p>{% endif %}
+      <p class="small"><strong>正文抓取预览：</strong>{{ post.content or "（当前抓取不到正文，可能被站点防爬限制）" }}</p>
+    </section>
+
+    <section class="card">
+      <h2>编辑识别字段</h2>
+      <form class="grid" method="post">
+        <label>品牌</label>
+        <input name="brand" value="{{ post.brand }}" placeholder="如：Apple" />
+
+        <label>商品名称</label>
+        <input name="product_name" value="{{ post.product_name }}" placeholder="如：MacBook Pro 14" />
+
+        <label>配置</label>
+        <input name="product_config" value="{{ post.product_config }}" placeholder="如：M3 Pro / 18G / 512G" />
+
+        <label style="display:flex;align-items:center;gap:6px;font-weight:500;">
+          <input type="checkbox" name="auto_training" value="true" checked style="width:auto;" />
+          将本次编辑自动写入 AI 训练参考
+        </label>
+
+        <button type="submit">保存编辑</button>
+      </form>
+    </section>
+  </body>
+</html>

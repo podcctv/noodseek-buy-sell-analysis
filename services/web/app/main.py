@@ -17,7 +17,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .config_store import ConfigStore, mask_domain
-from .schemas import AIConfig, AppConfig, BrandTrainingSample, DomainConfig, SystemConfig
+from .schemas import AIConfig, AppConfig, BrandTrainingSample, DomainConfig, PostOverride, SystemConfig
 
 BASE_DIR = Path(__file__).resolve().parent
 SERVICE_DIR = BASE_DIR.parent
@@ -220,7 +220,7 @@ async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any
     if not ai:
         ai = _rule_classify(entry_with_content, cfg)
 
-    return {
+    analyzed = {
         "uid": _entry_uid(entry),
         "title": entry.get("title", ""),
         "time": entry.get("pub_date") or "",
@@ -234,6 +234,8 @@ async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any
         "link": entry.get("link", ""),
         "content": content,
     }
+    override = _find_post_override(cfg, analyzed["uid"])
+    return _apply_post_override(analyzed, override)
 
 
 async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str, Any] | None:
@@ -381,8 +383,72 @@ def _build_brand_memory_prompt(cfg: AppConfig) -> str:
     rows = []
     for sample in samples:
         kw = "、".join(sample.keywords[:6])
-        rows.append(f"- 品牌:{sample.brand}; 商品:{sample.product_name}; 关键词:{kw}")
+        rows.append(f"- 品牌:{sample.brand}; 商品:{sample.product_name}; 配置:{sample.product_config}; 关键词:{kw}")
     return "品牌识别参考(人工标注优先参考):\\n" + "\\n".join(rows) + "\\n"
+
+
+def _find_post_override(cfg: AppConfig, uid: str) -> PostOverride | None:
+    return next((item for item in cfg.training.post_overrides if item.uid == uid), None)
+
+
+def _apply_post_override(post: dict[str, Any], override: PostOverride | None) -> dict[str, Any]:
+    if not override:
+        return post
+    patched = dict(post)
+    patched["brand"] = override.brand or patched.get("brand", "")
+    patched["product_name"] = override.product_name or patched.get("product_name", "")
+    patched["product_config"] = override.product_config or patched.get("product_config", "")
+    return patched
+
+
+def _upsert_brand_sample_from_post_override(
+    cfg: AppConfig,
+    *,
+    brand: str,
+    product_name: str,
+    product_config: str,
+    source_title: str,
+    source_link: str,
+) -> None:
+    normalized_brand = brand.strip()
+    if not normalized_brand:
+        return
+    normalized_product_name = product_name.strip()
+    normalized_product_config = product_config.strip()
+    note = f"来源: 帖子人工编辑自动入库 | 标题: {source_title} | 链接: {source_link}".strip()
+    existing = next(
+        (
+            sample
+            for sample in cfg.training.brand_samples
+            if sample.brand == normalized_brand
+            and sample.product_name == normalized_product_name
+            and sample.product_config == normalized_product_config
+        ),
+        None,
+    )
+    keywords: list[str] = []
+    for token in [normalized_product_name, normalized_product_config, source_title]:
+        if token and token not in keywords:
+            keywords.append(token)
+    if existing:
+        merged = existing.keywords + keywords
+        existing.keywords = list(dict.fromkeys([item.strip() for item in merged if item.strip()]))[:20]
+        existing.note = note
+        return
+
+    cfg.training.brand_samples.insert(
+        0,
+        BrandTrainingSample(
+            id=secrets.token_hex(8),
+            brand=normalized_brand,
+            product_name=normalized_product_name,
+            product_config=normalized_product_config,
+            keywords=keywords,
+            note=note,
+            created_at=_now_iso(),
+        ),
+    )
+    cfg.training.brand_samples = cfg.training.brand_samples[:500]
 
 
 def _guess_product_name(entry: dict[str, str], cfg: AppConfig) -> str:
@@ -530,8 +596,9 @@ def index(request: Request):
 
 @app.get("/api/v1/dashboard")
 async def dashboard_data(request: Request) -> dict[str, Any]:
+    cfg = store.load()
     async with runtime.lock:
-        posts = list(runtime.posts)
+        posts = [_apply_post_override(post, _find_post_override(cfg, str(post.get("uid", "")))) for post in runtime.posts]
 
     total = len(posts)
     buy = sum(1 for p in posts if p["intent"] == "buy")
@@ -724,6 +791,7 @@ def brand_training_page(request: Request):
     prefill = {
         "brand": request.query_params.get("brand", ""),
         "product_name": request.query_params.get("product_name", ""),
+        "product_config": request.query_params.get("product_config", ""),
         "keywords": request.query_params.get("keywords", ""),
         "note": request.query_params.get("note", ""),
         "source_title": request.query_params.get("source_title", ""),
@@ -745,6 +813,7 @@ def add_brand_training_sample(
     request: Request,
     brand: str = Form(...),
     product_name: str = Form(""),
+    product_config: str = Form(""),
     keywords: str = Form(""),
     note: str = Form(""),
 ):
@@ -756,6 +825,7 @@ def add_brand_training_sample(
         id=secrets.token_hex(8),
         brand=brand.strip(),
         product_name=product_name.strip(),
+        product_config=product_config.strip(),
         keywords=[k.strip() for k in re.split(r"[,\n，、]", keywords) if k.strip()],
         note=note.strip(),
         created_at=_now_iso(),
@@ -782,6 +852,89 @@ def list_brand_training() -> dict[str, Any]:
     cfg = store.load()
     samples = [s.model_dump(mode="json") for s in cfg.training.brand_samples[:200]]
     return {"items": samples, "total": len(cfg.training.brand_samples)}
+
+
+@app.get("/admin/post-edit/{uid}")
+def post_edit_page(request: Request, uid: str):
+    redirect = _require_auth_redirect(request)
+    if redirect:
+        return redirect
+    cfg = store.load()
+    override = _find_post_override(cfg, uid)
+    post = next((item for item in runtime.posts if item.get("uid") == uid), None)
+    if not post:
+        return RedirectResponse(url="/?missing_post=1", status_code=303)
+    post_view = _apply_post_override(dict(post), override)
+    return templates.TemplateResponse(
+        request,
+        "admin_post_edit.html",
+        {
+            "post": post_view,
+            "saved": request.query_params.get("saved") == "1",
+        },
+    )
+
+
+@app.post("/admin/post-edit/{uid}")
+def post_edit_save(
+    request: Request,
+    uid: str,
+    brand: str = Form(""),
+    product_name: str = Form(""),
+    product_config: str = Form(""),
+    auto_training: bool = Form(False),
+):
+    redirect = _require_auth_redirect(request)
+    if redirect:
+        return redirect
+    cfg = store.load()
+    post = next((item for item in runtime.posts if item.get("uid") == uid), None)
+    if not post:
+        return RedirectResponse(url="/?missing_post=1", status_code=303)
+
+    now = _now_iso()
+    normalized_brand = brand.strip()
+    normalized_name = product_name.strip()
+    normalized_config = product_config.strip()
+    existing = _find_post_override(cfg, uid)
+    if existing:
+        existing.brand = normalized_brand
+        existing.product_name = normalized_name
+        existing.product_config = normalized_config
+        existing.source_title = str(post.get("title", ""))
+        existing.source_link = str(post.get("link", ""))
+        existing.updated_at = now
+        override = existing
+    else:
+        override = PostOverride(
+            uid=uid,
+            brand=normalized_brand,
+            product_name=normalized_name,
+            product_config=normalized_config,
+            source_title=str(post.get("title", "")),
+            source_link=str(post.get("link", "")),
+            updated_at=now,
+        )
+        cfg.training.post_overrides.insert(0, override)
+        cfg.training.post_overrides = cfg.training.post_overrides[:1000]
+
+    patched = _apply_post_override(dict(post), override)
+    for idx, item in enumerate(runtime.posts):
+        if item.get("uid") == uid:
+            runtime.posts[idx] = patched
+            break
+
+    if auto_training:
+        _upsert_brand_sample_from_post_override(
+            cfg,
+            brand=normalized_brand,
+            product_name=normalized_name,
+            product_config=normalized_config,
+            source_title=str(post.get("title", "")),
+            source_link=str(post.get("link", "")),
+        )
+    store.save(cfg)
+    return RedirectResponse(url=f"/admin/post-edit/{uid}?saved=1", status_code=303)
 
 
 @app.post("/admin/settings/domain")
