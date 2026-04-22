@@ -82,7 +82,7 @@
           </div>
           <table>
             <thead>
-              <tr><th>发布时间</th><th>标题</th><th>商品名称</th><th>意图</th><th>价格</th><th>置信度</th><th id="adminActionHead" style="display:none;">管理</th></tr>
+              <tr><th>类型</th><th>发布时间</th><th>标题</th><th>品牌</th><th>商品名称 | 配置</th><th>价格</th><th>置信度</th><th id="adminActionHead" style="display:none;">管理</th></tr>
             </thead>
             <tbody id="postRows"></tbody>
           </table>
@@ -111,6 +111,7 @@
 
       function buildTrainingUrl(post) {
         const params = new URLSearchParams({
+          brand: post.brand || "",
           product_name: post.product_name || "",
           keywords: [post.product_name || "", post.title || ""].filter(Boolean).join(", "),
           note: "来源: 帖子明细人工标注(品牌识别训练)",
@@ -125,10 +126,11 @@
         const current = currentFilter === "all" ? posts : posts.filter((p) => p.intent === currentFilter);
         rows.innerHTML = current.map((p) => `
           <tr>
-            <td>${p.time || "-"}</td>
-            <td>${p.link ? `<a href="${p.link}" target="_blank">${p.title}</a>` : p.title}</td>
-            <td>${p.product_name || "-"}</td>
             <td><span class="badge ${p.intent}">${toIntentLabel(p.intent)}</span></td>
+            <td>${formatToUtc8(p.time)}</td>
+            <td>${p.link ? `<a href="${p.link}" target="_blank">${p.title}</a>` : p.title}</td>
+            <td>${p.brand || "未知"}</td>
+            <td>${[p.product_name || "-", p.product_config || "-"].join(" | ")}</td>
             <td>${p.price || "-"}</td>
             <td>${(Number(p.confidence || 0) * 100).toFixed(0)}%</td>
             ${isAdmin ? `<td><a class="btn-mini" href="${buildTrainingUrl(p)}">AI标注训练</a></td>` : ""}

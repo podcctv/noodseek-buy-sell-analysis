@@ -164,6 +164,31 @@ async def _fetch_rss_entries(rss_url: str, timeout_seconds: int) -> list[dict[st
     return entries
 
 
+async def _fetch_post_content(link: str, timeout_seconds: int) -> str:
+    if not link:
+        return ""
+    timeout = max(5, min(120, timeout_seconds))
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        resp = await client.get(link)
+        resp.raise_for_status()
+        html = resp.text or ""
+    if not html:
+        return ""
+
+    block_match = re.search(
+        r"<(article|main)[^>]*>(.*?)</(article|main)>",
+        html,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    raw = block_match.group(2) if block_match else html
+    text = re.sub(r"<script[^>]*>.*?</script>", " ", raw, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<style[^>]*>.*?</style>", " ", text, flags=re.IGNORECASE | re.DOTALL)
+    text = re.sub(r"<[^>]+>", " ", text)
+    text = re.sub(r"&nbsp;|&#160;", " ", text, flags=re.IGNORECASE)
+    text = re.sub(r"&amp;", "&", text, flags=re.IGNORECASE)
+    return _clean_text(text)[:3000]
+
+
 def _is_trade_entry(title: str, link: str, description: str, categories: list[str]) -> bool:
     normalized_categories = {c.strip().lower() for c in categories}
     return "trade" in normalized_categories
@@ -180,12 +205,20 @@ def _entry_uid(entry: dict[str, str]) -> str:
 
 
 async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any]:
+    content = ""
     try:
-        ai = await _classify_with_ai(entry, cfg.ai)
+        content = await _fetch_post_content(entry.get("link", ""), cfg.ai.timeout_seconds)
+    except Exception:
+        content = ""
+    entry_with_content = dict(entry)
+    entry_with_content["content"] = content
+
+    try:
+        ai = await _classify_with_ai(entry_with_content, cfg.ai)
     except Exception:
         ai = None
     if not ai:
-        ai = _rule_classify(entry, cfg)
+        ai = _rule_classify(entry_with_content, cfg)
 
     return {
         "uid": _entry_uid(entry),
@@ -193,10 +226,13 @@ async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any
         "time": entry.get("pub_date") or "",
         "intent": ai.get("intent", "unknown"),
         "product_name": ai.get("product_name", ""),
+        "product_config": ai.get("product_config", ""),
+        "brand": ai.get("brand", ""),
         "price": ai.get("price", "-"),
         "confidence": float(ai.get("confidence", 0.5)),
         "summary": ai.get("summary", ""),
         "link": entry.get("link", ""),
+        "content": content,
     }
 
 
@@ -205,10 +241,11 @@ async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str
     memory = _build_brand_memory_prompt(cfg)
     prompt = (
         "你是二手交易帖分类器。请严格返回 JSON，不要输出其它文字。\\n"
-        "字段: intent(buy/sell/unknown), product_name(商品名称字符串), price(字符串,没有写-), confidence(0-1), summary(<=30字)。\\n"
+        "字段: intent(buy/sell/unknown), brand(品牌,无法判断填未知), product_name(商品名称字符串), product_config(配置,无法判断填-), price(字符串,没有写-), confidence(0-1), summary(<=30字)。\\n"
         f"{memory}"
         f"标题: {entry.get('title', '')}\\n"
-        f"描述: {entry.get('description', '')}"
+        f"描述: {entry.get('description', '')}\\n"
+        f"正文: {entry.get('content', '')}"
     )
     payload = {
         "model": ai_cfg.model,
@@ -269,7 +306,9 @@ async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str
 
     return {
         "intent": intent,
+        "brand": str(parsed.get("brand", "") or ""),
         "product_name": str(parsed.get("product_name", "") or ""),
+        "product_config": str(parsed.get("product_config", "") or ""),
         "price": str(parsed.get("price", "-") or "-"),
         "confidence": confidence,
         "summary": str(parsed.get("summary", "") or ""),
@@ -360,7 +399,7 @@ def _guess_product_name(entry: dict[str, str], cfg: AppConfig) -> str:
 
 
 def _rule_classify(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any]:
-    text = f"{entry.get('title', '')} {entry.get('description', '')}".lower()
+    text = f"{entry.get('title', '')} {entry.get('description', '')} {entry.get('content', '')}".lower()
     buy_keywords = ["求购", "收", "蹲", "want", "buy"]
     sell_keywords = ["出", "出售", "转让", "闲置", "sell"]
 
@@ -380,11 +419,47 @@ def _rule_classify(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any]:
 
     return {
         "intent": intent,
+        "brand": _guess_brand(entry, cfg),
         "product_name": _guess_product_name(entry, cfg),
+        "product_config": _guess_product_config(entry),
         "price": price,
         "confidence": confidence,
         "summary": "规则兜底",
     }
+
+
+def _guess_brand(entry: dict[str, str], cfg: AppConfig) -> str:
+    text = f"{entry.get('title', '')} {entry.get('description', '')} {entry.get('content', '')}".lower()
+    for sample in cfg.training.brand_samples:
+        if sample.brand and sample.brand.lower() in text:
+            return sample.brand
+        if sample.product_name and sample.product_name.lower() in text:
+            return sample.brand
+        for keyword in sample.keywords:
+            if keyword and keyword.lower() in text:
+                return sample.brand
+    return "未知"
+
+
+def _guess_product_config(entry: dict[str, str]) -> str:
+    text = f"{entry.get('title', '')} {entry.get('description', '')} {entry.get('content', '')}"
+    patterns = [
+        r"(\d+\s*(?:g|gb|t|tb|核|线程|寸|英寸|w|hz|mhz|ghz))",
+        r"((?:i[3579]-?\d{3,5}[a-z]{0,2}|r[3579]\s?\d{3,5}[a-z]{0,2}))",
+        r"((?:\d{3,4}0\s?(?:ti|super)?))",
+        r"((?:16g\+512g|32g\+1t|\d+g\+\d+g))",
+    ]
+    matched: list[str] = []
+    for pattern in patterns:
+        for m in re.findall(pattern, text, flags=re.IGNORECASE):
+            token = _clean_text(m).upper().replace(" ", "")
+            if token and token not in matched:
+                matched.append(token)
+            if len(matched) >= 4:
+                break
+        if len(matched) >= 4:
+            break
+    return " / ".join(matched) if matched else "-"
 
 
 def _now_iso() -> str:
