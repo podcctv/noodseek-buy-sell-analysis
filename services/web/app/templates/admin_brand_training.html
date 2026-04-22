@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>品牌训练</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; background: #f8fafc; color: #0f172a; }
+      .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .grid { display: grid; gap: 8px; }
+      label { font-weight: 600; font-size: 14px; }
+      input, textarea { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; width: 100%; }
+      button { padding: 8px 12px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; border-bottom: 1px solid #e2e8f0; padding: 8px 4px; font-size: 14px; vertical-align: top; }
+      .ok { color: #166534; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>品牌识别训练</h1>
+    <p><a href="/admin/settings">返回配置中心</a></p>
+    {% if saved %}<p class="ok">保存成功 ✅</p>{% endif %}
+
+    <section class="card">
+      <h2>添加人工标注样本</h2>
+      <form class="grid" method="post" action="/admin/brand-training/add">
+        <label>品牌</label>
+        <input name="brand" required />
+
+        <label>商品名称</label>
+        <input name="product_name" placeholder="如：AirPods Pro 2" />
+
+        <label>关键词（逗号/换行分隔）</label>
+        <textarea name="keywords" rows="3" placeholder="airpods, 苹果耳机"></textarea>
+
+        <label>备注</label>
+        <textarea name="note" rows="2"></textarea>
+
+        <button type="submit">保存样本</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>已保存样本（{{ samples | length }}）</h2>
+      <table>
+        <thead>
+          <tr><th>品牌</th><th>商品名称</th><th>关键词</th><th>备注</th><th>操作</th></tr>
+        </thead>
+        <tbody>
+          {% for s in samples %}
+            <tr>
+              <td>{{ s.brand }}</td>
+              <td>{{ s.product_name }}</td>
+              <td>{{ "、".join(s.keywords) }}</td>
+              <td>{{ s.note }}</td>
+              <td>
+                <form method="post" action="/admin/brand-training/{{ s.id }}/delete" onsubmit="return confirm('确认删除?');">
+                  <button type="submit">删除</button>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </body>
+</html>

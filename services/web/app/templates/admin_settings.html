@@ -22,6 +22,7 @@
     <form method="post" action="/admin/logout" style="margin-bottom: 16px;">
       <button type="submit">退出登录</button>
     </form>
+    <p><a href="/admin/brand-training">进入品牌训练页面</a></p>
     {% if saved %}<p class="ok">保存成功 ✅</p>{% endif %}
 
     <section class="card">
@@ -72,7 +73,7 @@
         <input name="model" value="{{ config.ai.model }}" required />
 
         <label>超时（秒）</label>
-        <input name="timeout_seconds" type="number" min="1" max="300" value="{{ config.ai.timeout_seconds }}" required />
+        <input name="timeout_seconds" type="number" min="1" max="1800" value="{{ config.ai.timeout_seconds }}" required />
 
         <button type="submit">保存 AI 配置</button>
       </form>

@@ -17,7 +17,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from .config_store import ConfigStore, mask_domain
-from .schemas import AIConfig, AppConfig, DomainConfig, SystemConfig
+from .schemas import AIConfig, AppConfig, BrandTrainingSample, DomainConfig, SystemConfig
 
 store = ConfigStore(path=Path("data/app_config.json"))
 templates = Jinja2Templates(directory="services/web/app/templates")
@@ -178,13 +178,14 @@ def _entry_uid(entry: dict[str, str]) -> str:
 async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any]:
     ai = await _classify_with_ai(entry, cfg.ai)
     if not ai:
-        ai = _rule_classify(entry)
+        ai = _rule_classify(entry, cfg)
 
     return {
         "uid": _entry_uid(entry),
         "title": entry.get("title", ""),
         "time": entry.get("pub_date") or "",
         "intent": ai.get("intent", "unknown"),
+        "product_name": ai.get("product_name", ""),
         "price": ai.get("price", "-"),
         "confidence": float(ai.get("confidence", 0.5)),
         "summary": ai.get("summary", ""),
@@ -193,9 +194,12 @@ async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any
 
 
 async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str, Any] | None:
+    cfg = store.load()
+    memory = _build_brand_memory_prompt(cfg)
     prompt = (
         "你是二手交易帖分类器。请严格返回 JSON，不要输出其它文字。\\n"
-        "字段: intent(buy/sell/unknown), price(字符串,没有写-), confidence(0-1), summary(<=30字)。\\n"
+        "字段: intent(buy/sell/unknown), product_name(商品名称字符串), price(字符串,没有写-), confidence(0-1), summary(<=30字)。\\n"
+        f"{memory}"
         f"标题: {entry.get('title', '')}\\n"
         f"描述: {entry.get('description', '')}"
     )
@@ -242,6 +246,7 @@ async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str
 
     return {
         "intent": intent,
+        "product_name": str(parsed.get("product_name", "") or ""),
         "price": str(parsed.get("price", "-") or "-"),
         "confidence": confidence,
         "summary": str(parsed.get("summary", "") or ""),
@@ -295,7 +300,31 @@ def _format_exception(exc: Exception) -> str:
     return detail
 
 
-def _rule_classify(entry: dict[str, str]) -> dict[str, Any]:
+def _build_brand_memory_prompt(cfg: AppConfig) -> str:
+    samples = cfg.training.brand_samples[:20]
+    if not samples:
+        return ""
+    rows = []
+    for sample in samples:
+        kw = "、".join(sample.keywords[:6])
+        rows.append(f"- 品牌:{sample.brand}; 商品:{sample.product_name}; 关键词:{kw}")
+    return "品牌识别参考(人工标注优先参考):\\n" + "\\n".join(rows) + "\\n"
+
+
+def _guess_product_name(entry: dict[str, str], cfg: AppConfig) -> str:
+    title = entry.get("title", "")
+    normalized = re.sub(r"\[[^\]]+\]", " ", title)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    for sample in cfg.training.brand_samples:
+        if sample.product_name and sample.product_name in title:
+            return sample.product_name
+        for keyword in sample.keywords:
+            if keyword and keyword.lower() in title.lower():
+                return sample.product_name or keyword
+    return normalized[:48]
+
+
+def _rule_classify(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any]:
     text = f"{entry.get('title', '')} {entry.get('description', '')}".lower()
     buy_keywords = ["求购", "收", "蹲", "want", "buy"]
     sell_keywords = ["出", "出售", "转让", "闲置", "sell"]
@@ -316,6 +345,7 @@ def _rule_classify(entry: dict[str, str]) -> dict[str, Any]:
 
     return {
         "intent": intent,
+        "product_name": _guess_product_name(entry, cfg),
         "price": price,
         "confidence": confidence,
         "summary": "规则兜底",
@@ -532,6 +562,66 @@ def admin_settings(request: Request):
             "saved": request.query_params.get("saved") == "1",
         },
     )
+
+
+@app.get("/admin/brand-training")
+def brand_training_page(request: Request):
+    redirect = _require_auth_redirect(request)
+    if redirect:
+        return redirect
+    cfg = store.load()
+    return templates.TemplateResponse(
+        request,
+        "admin_brand_training.html",
+        {
+            "samples": cfg.training.brand_samples,
+            "saved": request.query_params.get("saved") == "1",
+        },
+    )
+
+
+@app.post("/admin/brand-training/add")
+def add_brand_training_sample(
+    request: Request,
+    brand: str = Form(...),
+    product_name: str = Form(""),
+    keywords: str = Form(""),
+    note: str = Form(""),
+):
+    redirect = _require_auth_redirect(request)
+    if redirect:
+        return redirect
+    cfg = store.load()
+    sample = BrandTrainingSample(
+        id=secrets.token_hex(8),
+        brand=brand.strip(),
+        product_name=product_name.strip(),
+        keywords=[k.strip() for k in re.split(r"[,\n，、]", keywords) if k.strip()],
+        note=note.strip(),
+        created_at=_now_iso(),
+    )
+    cfg.training.brand_samples.insert(0, sample)
+    cfg.training.brand_samples = cfg.training.brand_samples[:500]
+    store.save(cfg)
+    return RedirectResponse(url="/admin/brand-training?saved=1", status_code=303)
+
+
+@app.post("/admin/brand-training/{sample_id}/delete")
+def delete_brand_training_sample(request: Request, sample_id: str):
+    redirect = _require_auth_redirect(request)
+    if redirect:
+        return redirect
+    cfg = store.load()
+    cfg.training.brand_samples = [s for s in cfg.training.brand_samples if s.id != sample_id]
+    store.save(cfg)
+    return RedirectResponse(url="/admin/brand-training?saved=1", status_code=303)
+
+
+@app.get("/api/v1/brand-training")
+def list_brand_training() -> dict[str, Any]:
+    cfg = store.load()
+    samples = [s.model_dump(mode="json") for s in cfg.training.brand_samples[:200]]
+    return {"items": samples, "total": len(cfg.training.brand_samples)}
 
 
 @app.post("/admin/settings/domain")

@@ -22,7 +22,7 @@ class AIConfig(BaseModel):
     base_url: HttpUrl = Field(default_factory=lambda: _to_http_url("https://llm.428048.xyz/v1"))
     api_key: SecretStr = Field(default=SecretStr(""))
     model: str = "gpt-4o-mini"
-    timeout_seconds: int = Field(default=30, ge=1, le=300)
+    timeout_seconds: int = Field(default=120, ge=1, le=1800)
     chat_completions_path: str = "/chat/completions"
     request_method: str = "POST"
     auth_mode: str = "none"
@@ -42,6 +42,23 @@ class SystemConfig(BaseModel):
     timezone: str = "Asia/Shanghai"
 
 
+class BrandTrainingSample(BaseModel):
+    """品牌识别训练样本（人工标注）。"""
+
+    id: str
+    brand: str
+    product_name: str = ""
+    keywords: list[str] = Field(default_factory=list)
+    note: str = ""
+    created_at: str
+
+
+class TrainingConfig(BaseModel):
+    """训练与参考配置。"""
+
+    brand_samples: list[BrandTrainingSample] = Field(default_factory=list)
+
+
 class AppConfig(BaseModel):
     class AuthConfig(BaseModel):
         password_hash: str = ""
@@ -50,4 +67,5 @@ class AppConfig(BaseModel):
     domain: DomainConfig = Field(default_factory=DomainConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
     system: SystemConfig = Field(default_factory=SystemConfig)
+    training: TrainingConfig = Field(default_factory=TrainingConfig)
     auth: AuthConfig = Field(default_factory=AuthConfig)
