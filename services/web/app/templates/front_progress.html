@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI 处理进度 - NodeSeek 买卖分析</title>
+    <style>
+      :root {
+        --bg: linear-gradient(180deg, #f3f6ff 0%, #f8fafc 100%);
+        --card: #fff;
+        --text: #0f172a;
+        --muted: #64748b;
+        --brand: #2563eb;
+        --border: #e2e8f0;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: var(--text);
+        background: var(--bg);
+      }
+      .container { max-width: 1100px; margin: 26px auto; padding: 0 16px 30px; }
+      .header { display: flex; justify-content: space-between; gap: 10px; align-items: center; margin-bottom: 16px; }
+      h1 { margin: 0; font-size: 30px; }
+      .tip { margin: 8px 0 0; color: var(--muted); }
+      .btn { display: inline-flex; align-items: center; justify-content: center; border-radius: 10px; padding: 10px 14px; font-weight: 700; text-decoration: none; border: 1px solid #bfdbfe; color: var(--brand); background: #fff; }
+      .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.07); padding: 16px; margin-bottom: 12px; }
+      .flow { margin: 0; padding-left: 18px; color: #334155; line-height: 1.7; }
+      .small { color: var(--muted); font-size: 13px; }
+      .progress-item { border-bottom: 1px solid var(--border); padding: 10px 0; }
+      .progress-item:last-child { border-bottom: 0; }
+      .status-running { color: #2563eb; }
+      .status-done { color: #16a34a; }
+      .status-failed { color: #dc2626; }
+      .status-cancelled { color: #64748b; }
+      .topline { display:flex; justify-content:space-between; gap: 10px; align-items:center; }
+      .btn-mini { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 6px; font-size: 12px; padding: 3px 7px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <header class="header">
+        <div>
+          <h1>AI 处理进度</h1>
+          <p class="tip">查看抓取、分析、完成全过程，以及失败原因与重试状态。</p>
+        </div>
+        <a class="btn" href="/">返回分析面板</a>
+      </header>
+
+      <section class="card">
+        <h3 style="margin-top:0;">AI 到底如何处理？</h3>
+        <ol class="flow">
+          <li>系统按周期抓取 RSS，并筛选交易帖。</li>
+          <li>逐条读取帖子内容（正文抓取失败时会降级为规则解析）。</li>
+          <li>优先调用 AI 模型识别：买/卖意图、品牌、型号配置、价格、置信度。</li>
+          <li>如果 AI 不可用或异常，则回退到关键词规则分类。</li>
+          <li>最终结果写入首页列表，并记录该条处理状态（done/failed/cancelled）。</li>
+        </ol>
+      </section>
+
+      <section class="card">
+        <div class="topline">
+          <h3 style="margin:0;">实时任务</h3>
+          <button type="button" id="pollNowBtn" class="btn-mini">立即抓取</button>
+        </div>
+        <p class="small" id="progressMeta">等待中...</p>
+        <div id="progressList"></div>
+      </section>
+    </div>
+
+    <script>
+      function formatToUtc8(value) {
+        if (!value) return "-";
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return value;
+        const utc8Ms = parsed.getTime() + (8 * 60 * 60 * 1000);
+        const utc8 = new Date(utc8Ms);
+        const year = utc8.getUTCFullYear();
+        const month = String(utc8.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(utc8.getUTCDate()).padStart(2, "0");
+        const hour = String(utc8.getUTCHours()).padStart(2, "0");
+        const minute = String(utc8.getUTCMinutes()).padStart(2, "0");
+        const second = String(utc8.getUTCSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+      }
+
+      function renderProgress(data) {
+        const meta = document.getElementById("progressMeta");
+        meta.textContent = `状态: ${data.running ? "抓取/分析中" : "空闲"} | 最近抓取: ${formatToUtc8(data.last_fetch_at)}${data.last_error ? ` | 错误: ${data.last_error}` : ""}`;
+
+        const statusClass = {
+          running: "status-running",
+          done: "status-done",
+          failed: "status-failed",
+          cancelled: "status-cancelled",
+        };
+
+        const list = document.getElementById("progressList");
+        list.innerHTML = (data.items || []).map((item) => `
+          <div class="progress-item">
+            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+              <div class="small ${statusClass[item.status] || ""}">${item.status}</div>
+              ${item.status === "running" ? `<button type="button" class="btn-mini" data-cancel-uid="${item.uid}">取消</button>` : ""}
+              ${item.status === "failed" ? `<button type="button" class="btn-mini" data-retry-uid="${item.uid}">重试</button>` : ""}
+            </div>
+            <div>${item.title || "-"}</div>
+            <div class="small">${item.message || ""}</div>
+          </div>
+        `).join("");
+      }
+
+      async function loadProgress() {
+        const res = await fetch("/api/v1/progress");
+        const data = await res.json();
+        renderProgress(data);
+      }
+
+      document.getElementById("pollNowBtn").addEventListener("click", async () => {
+        await fetch("/api/v1/poll-now", { method: "POST" });
+        setTimeout(loadProgress, 350);
+      });
+
+      document.getElementById("progressList").addEventListener("click", async (event) => {
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        const uid = target.dataset.cancelUid;
+        if (uid) {
+          await fetch(`/api/v1/progress/${uid}/cancel`, { method: "POST" });
+          await loadProgress();
+          return;
+        }
+        const retryUid = target.dataset.retryUid;
+        if (!retryUid) return;
+        await fetch(`/api/v1/progress/${retryUid}/retry`, { method: "POST" });
+        await loadProgress();
+      });
+
+      async function tick() {
+        try {
+          await loadProgress();
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      tick();
+      setInterval(tick, 5000);
+    </script>
+  </body>
+</html>
