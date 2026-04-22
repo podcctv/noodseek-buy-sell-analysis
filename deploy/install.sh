@@ -102,6 +102,39 @@ EOT
   log "已生成默认配置: ${env_file}"
 }
 
+ensure_image_repo() {
+  local env_file expected_image tmp_file current_image
+  env_file="${INSTALL_DIR}/deploy/.env"
+  expected_image="ghcr.io/${REPO_SLUG,,}"
+
+  if [[ ! -f "${env_file}" ]]; then
+    return
+  fi
+
+  current_image="$(awk -F'=' '/^IMAGE_REPO=/{print $2}' "${env_file}" | tail -n1)"
+  if [[ -n "${current_image}" ]] && [[ "${current_image}" != "ghcr.io/owner/noodseek-buy-sell-analysis" ]]; then
+    return
+  fi
+
+  tmp_file="$(mktemp)"
+  awk -v image_repo="${expected_image}" '
+    BEGIN { changed = 0 }
+    /^IMAGE_REPO=/ {
+      print "IMAGE_REPO=" image_repo
+      changed = 1
+      next
+    }
+    { print }
+    END {
+      if (!changed) {
+        print "IMAGE_REPO=" image_repo
+      }
+    }
+  ' "${env_file}" > "${tmp_file}"
+  mv "${tmp_file}" "${env_file}"
+  log "已将 IMAGE_REPO 设置为: ${expected_image}"
+}
+
 pull_and_up() {
   log "启动/更新服务容器"
   (cd "${INSTALL_DIR}/deploy" && "${COMPOSE_CMD[@]}" --env-file .env pull)
@@ -134,6 +167,7 @@ main() {
   fi
 
   ensure_env_file
+  ensure_image_repo
   pull_and_up
   print_next_steps
 }
