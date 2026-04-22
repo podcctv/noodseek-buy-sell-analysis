@@ -1,10 +1,17 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import hmac
+import json
+import re
 import secrets
+from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any
+from xml.etree import ElementTree as ET
 
+import httpx
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -12,12 +19,249 @@ from fastapi.templating import Jinja2Templates
 from .config_store import ConfigStore, mask_domain
 from .schemas import AIConfig, AppConfig, DomainConfig, SystemConfig
 
-app = FastAPI(title="NodeSeek Admin")
 store = ConfigStore(path=Path("data/app_config.json"))
 templates = Jinja2Templates(directory="services/web/app/templates")
 SESSION_COOKIE_NAME = "nodeseek_admin_session"
 SESSION_SECRET = secrets.token_hex(32)
 DEFAULT_PASSWORD = "123456"
+app = FastAPI(title="NodeSeek Admin")
+
+
+class RuntimeState:
+    """运行期内存状态：帖子缓存与 AI 处理进度。"""
+
+    def __init__(self) -> None:
+        self.posts: list[dict[str, Any]] = []
+        self.post_index: set[str] = set()
+        self.progress_items: list[dict[str, Any]] = []
+        self.running: bool = False
+        self.last_fetch_at: str | None = None
+        self.last_error: str | None = None
+        self.lock = asyncio.Lock()
+
+
+runtime = RuntimeState()
+
+
+async def _poll_loop() -> None:
+    while True:
+        cfg = store.load()
+        await _poll_once(cfg)
+        await asyncio.sleep(cfg.system.rss_poll_interval_seconds)
+
+
+async def _poll_once(cfg: AppConfig) -> None:
+    async with runtime.lock:
+        if runtime.running:
+            return
+        runtime.running = True
+
+    try:
+        entries = await _fetch_rss_entries(str(cfg.domain.rss_domain), cfg.ai.timeout_seconds)
+        for entry in entries:
+            uid = _entry_uid(entry)
+            async with runtime.lock:
+                if uid in runtime.post_index:
+                    continue
+                progress = {
+                    "uid": uid,
+                    "title": entry.get("title", ""),
+                    "status": "running",
+                    "message": "AI 处理中",
+                    "started_at": _now_iso(),
+                    "finished_at": None,
+                }
+                runtime.progress_items.insert(0, progress)
+                runtime.progress_items = runtime.progress_items[:100]
+
+            analyzed = await _analyze_entry(entry, cfg)
+
+            async with runtime.lock:
+                runtime.post_index.add(uid)
+                runtime.posts.insert(0, analyzed)
+                runtime.posts = runtime.posts[:300]
+                progress["status"] = "done"
+                progress["message"] = f"完成：{analyzed['intent']} ({int(analyzed['confidence'] * 100)}%)"
+                progress["finished_at"] = _now_iso()
+
+        async with runtime.lock:
+            runtime.last_fetch_at = _now_iso()
+            runtime.last_error = None
+    except Exception as exc:  # noqa: BLE001
+        async with runtime.lock:
+            runtime.last_error = str(exc)
+    finally:
+        async with runtime.lock:
+            runtime.running = False
+
+
+async def _fetch_rss_entries(rss_url: str, timeout_seconds: int) -> list[dict[str, str]]:
+    timeout = max(5, min(120, timeout_seconds))
+    async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
+        resp = await client.get(rss_url)
+        resp.raise_for_status()
+        xml = resp.text
+
+    root = ET.fromstring(xml)
+    items = root.findall("./channel/item")
+    if not items:
+        items = root.findall(".//item")
+
+    entries: list[dict[str, str]] = []
+    for item in items[:40]:
+        title = _clean_text(item.findtext("title", default=""))
+        link = _clean_text(item.findtext("link", default=""))
+        guid = _clean_text(item.findtext("guid", default=""))
+        pub_date = _clean_text(item.findtext("pubDate", default=""))
+        desc = _clean_text(item.findtext("description", default=""))
+        if not title:
+            continue
+        entries.append(
+            {
+                "title": title,
+                "link": link,
+                "guid": guid,
+                "pub_date": pub_date,
+                "description": desc,
+            }
+        )
+    return entries
+
+
+def _clean_text(value: str) -> str:
+    return re.sub(r"\s+", " ", value or "").strip()
+
+
+def _entry_uid(entry: dict[str, str]) -> str:
+    base = entry.get("guid") or entry.get("link") or entry.get("title", "")
+    pub = entry.get("pub_date", "")
+    return hashlib.sha256(f"{base}|{pub}".encode("utf-8")).hexdigest()
+
+
+async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any]:
+    ai = await _classify_with_ai(entry, cfg.ai)
+    if not ai:
+        ai = _rule_classify(entry)
+
+    return {
+        "uid": _entry_uid(entry),
+        "title": entry.get("title", ""),
+        "time": entry.get("pub_date") or "",
+        "intent": ai.get("intent", "unknown"),
+        "price": ai.get("price", "-"),
+        "confidence": float(ai.get("confidence", 0.5)),
+        "summary": ai.get("summary", ""),
+        "link": entry.get("link", ""),
+    }
+
+
+async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str, Any] | None:
+    prompt = (
+        "你是二手交易帖分类器。请严格返回 JSON，不要输出其它文字。\\n"
+        "字段: intent(buy/sell/unknown), price(字符串,没有写-), confidence(0-1), summary(<=30字)。\\n"
+        f"标题: {entry.get('title', '')}\\n"
+        f"描述: {entry.get('description', '')}"
+    )
+    payload = {
+        "model": ai_cfg.model,
+        "messages": [
+            {"role": "system", "content": "你只返回 JSON"},
+            {"role": "user", "content": prompt},
+        ],
+        "temperature": 0.1,
+        "response_format": {"type": "json_object"},
+    }
+
+    headers = dict(ai_cfg.custom_headers)
+    api_key = ai_cfg.api_key.get_secret_value().strip()
+    if ai_cfg.auth_mode == "bearer" and api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+
+    url = f"{str(ai_cfg.base_url).rstrip('/')}{ai_cfg.chat_completions_path}"
+
+    async with httpx.AsyncClient(timeout=ai_cfg.timeout_seconds) as client:
+        response = await client.request(ai_cfg.request_method.upper(), url, headers=headers, json=payload)
+        response.raise_for_status()
+        data = response.json()
+
+    raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+    if not raw:
+        return None
+
+    parsed = _extract_json(raw)
+    if not isinstance(parsed, dict):
+        return None
+
+    intent = str(parsed.get("intent", "unknown")).lower()
+    if intent not in {"buy", "sell", "unknown"}:
+        intent = "unknown"
+
+    confidence = parsed.get("confidence", 0.5)
+    try:
+        confidence = float(confidence)
+    except (TypeError, ValueError):
+        confidence = 0.5
+    confidence = max(0.0, min(1.0, confidence))
+
+    return {
+        "intent": intent,
+        "price": str(parsed.get("price", "-") or "-"),
+        "confidence": confidence,
+        "summary": str(parsed.get("summary", "") or ""),
+    }
+
+
+def _extract_json(raw: str) -> Any:
+    text = raw.strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    m = re.search(r"\{.*\}", text, re.DOTALL)
+    if not m:
+        return None
+    try:
+        return json.loads(m.group(0))
+    except json.JSONDecodeError:
+        return None
+
+
+def _rule_classify(entry: dict[str, str]) -> dict[str, Any]:
+    text = f"{entry.get('title', '')} {entry.get('description', '')}".lower()
+    buy_keywords = ["求购", "收", "蹲", "want", "buy"]
+    sell_keywords = ["出", "出售", "转让", "闲置", "sell"]
+
+    intent = "unknown"
+    confidence = 0.55
+    if any(k in text for k in buy_keywords):
+        intent = "buy"
+        confidence = 0.8
+    if any(k in text for k in sell_keywords):
+        intent = "sell"
+        confidence = 0.8
+
+    price_match = re.search(r"([￥¥]?\s?\d{2,6})", text)
+    price = price_match.group(1).replace(" ", "") if price_match else "-"
+    if price and not price.startswith(("¥", "￥", "-")):
+        price = f"¥{price}"
+
+    return {
+        "intent": intent,
+        "price": price,
+        "confidence": confidence,
+        "summary": "规则兜底",
+    }
+
+
+def _now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+@app.on_event("startup")
+async def startup_polling() -> None:
+    _bootstrap_default_password()
+    asyncio.create_task(_poll_loop())
 
 
 def hash_password(password: str) -> str:
@@ -74,6 +318,55 @@ def _require_auth_redirect(request: Request) -> RedirectResponse | None:
 @app.get("/")
 def index(request: Request):
     return templates.TemplateResponse(request, "front_dashboard.html", {})
+
+
+@app.get("/api/v1/dashboard")
+async def dashboard_data() -> dict[str, Any]:
+    async with runtime.lock:
+        posts = list(runtime.posts)
+
+    total = len(posts)
+    buy = sum(1 for p in posts if p["intent"] == "buy")
+    sell = sum(1 for p in posts if p["intent"] == "sell")
+    avg_conf = round(sum(float(p["confidence"]) for p in posts) / total, 2) if total else 0
+
+    hot_counter: dict[str, int] = {}
+    for p in posts:
+        for token in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,16}", p["title"]):
+            if token in {"求购", "出售", "闲置", "转让", "国行"}:
+                continue
+            hot_counter[token] = hot_counter.get(token, 0) + 1
+
+    hot_words = sorted(hot_counter.items(), key=lambda x: x[1], reverse=True)[:8]
+
+    return {
+        "metrics": {
+            "total": total,
+            "buy_rate": round((buy / total) * 100) if total else 0,
+            "sell_rate": round((sell / total) * 100) if total else 0,
+            "avg_conf": avg_conf,
+        },
+        "posts": posts[:100],
+        "hot_words": hot_words,
+    }
+
+
+@app.get("/api/v1/progress")
+async def progress_data() -> dict[str, Any]:
+    async with runtime.lock:
+        return {
+            "running": runtime.running,
+            "last_fetch_at": runtime.last_fetch_at,
+            "last_error": runtime.last_error,
+            "items": list(runtime.progress_items[:20]),
+        }
+
+
+@app.post("/api/v1/poll-now")
+async def poll_now() -> dict[str, str]:
+    cfg = store.load()
+    asyncio.create_task(_poll_once(cfg))
+    return {"ok": "true"}
 
 
 @app.get("/admin/login")

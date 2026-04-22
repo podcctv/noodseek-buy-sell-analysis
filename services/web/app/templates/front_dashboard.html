@@ -16,109 +16,35 @@
         --unknown: #475569;
       }
       * { box-sizing: border-box; }
-      body {
-        margin: 0;
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: var(--bg);
-        color: var(--text);
-      }
-      .container {
-        max-width: 1100px;
-        margin: 24px auto;
-        padding: 0 16px 32px;
-      }
-      .header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 18px;
-      }
-      .title {
-        margin: 0;
-        font-size: 28px;
-      }
+      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
+      .container { max-width: 1100px; margin: 24px auto; padding: 0 16px 32px; }
+      .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 10px; }
+      .title { margin: 0; font-size: 28px; }
       .tip { color: var(--muted); margin: 6px 0 0; }
-      .btn {
-        background: var(--brand);
-        color: #fff;
-        text-decoration: none;
-        border-radius: 8px;
-        padding: 10px 14px;
-        font-weight: 600;
-      }
-      .metrics {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 12px;
-        margin-bottom: 16px;
-      }
-      .card {
-        background: var(--card);
-        border-radius: 12px;
-        box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1);
-        padding: 14px;
-      }
+      .btn { background: var(--brand); color: #fff; text-decoration: none; border-radius: 8px; padding: 10px 14px; font-weight: 600; border: 0; cursor: pointer; }
+      .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+      .card { background: var(--card); border-radius: 12px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1); padding: 14px; }
       .metric-title { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
       .metric-val { margin: 0; font-size: 26px; font-weight: 700; }
       .metric-sub { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
-      .row {
-        display: grid;
-        grid-template-columns: 2fr 1fr;
-        gap: 12px;
-      }
-      @media (max-width: 860px) {
-        .row { grid-template-columns: 1fr; }
-      }
-      .toolbar {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        margin-bottom: 10px;
-        flex-wrap: wrap;
-      }
-      .chip {
-        border: 1px solid #cbd5e1;
-        background: #fff;
-        border-radius: 999px;
-        padding: 6px 10px;
-        cursor: pointer;
-        font-size: 13px;
-      }
+      .row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
+      @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+      .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+      .chip { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
       .chip.active { border-color: var(--brand); color: var(--brand); }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      th, td {
-        text-align: left;
-        border-bottom: 1px solid #e2e8f0;
-        padding: 9px 6px;
-        font-size: 14px;
-      }
-      .badge {
-        display: inline-block;
-        border-radius: 999px;
-        padding: 2px 8px;
-        color: #fff;
-        font-size: 12px;
-        font-weight: 700;
-      }
+      table { width: 100%; border-collapse: collapse; }
+      th, td { text-align: left; border-bottom: 1px solid #e2e8f0; padding: 9px 6px; font-size: 14px; vertical-align: top; }
+      .badge { display: inline-block; border-radius: 999px; padding: 2px 8px; color: #fff; font-size: 12px; font-weight: 700; }
       .buy { background: var(--ok); }
       .sell { background: var(--warn); }
       .unknown { background: var(--unknown); }
-      .list {
-        margin: 0;
-        padding: 0;
-        list-style: none;
-      }
-      .list li {
-        padding: 8px 0;
-        border-bottom: 1px solid #e2e8f0;
-        display: flex;
-        justify-content: space-between;
-        gap: 10px;
-      }
+      .list { margin: 0; padding: 0; list-style: none; }
+      .list li { padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 10px; }
       .small { color: var(--muted); font-size: 12px; }
+      .progress-item { border-bottom: 1px solid #e2e8f0; padding: 8px 0; }
+      .progress-item:last-child { border-bottom: 0; }
+      .status-running { color: #2563eb; }
+      .status-done { color: #16a34a; }
     </style>
   </head>
   <body>
@@ -126,22 +52,25 @@
       <header class="header">
         <div>
           <h1 class="title">NodeSeek 买卖分析面板</h1>
-          <p class="tip">实时聚合买卖帖趋势，支持按意图筛选与热点追踪。</p>
+          <p class="tip">实时抓取 RSS + AI 分类。可查看处理进度。</p>
         </div>
-        <a class="btn" href="/admin/login">进入后台配置</a>
+        <div>
+          <button class="btn" id="pollNowBtn" type="button">立即抓取</button>
+          <a class="btn" href="/admin/login">进入后台配置</a>
+        </div>
       </header>
 
       <section class="metrics">
-        <article class="card"><p class="metric-title">今日帖子总量</p><p class="metric-val" id="totalCount">0</p><p class="metric-sub">较昨日 +12%</p></article>
+        <article class="card"><p class="metric-title">帖子总量</p><p class="metric-val" id="totalCount">0</p><p class="metric-sub">实时累计</p></article>
         <article class="card"><p class="metric-title">求购占比</p><p class="metric-val" id="buyRate">0%</p><p class="metric-sub">需求端强度</p></article>
         <article class="card"><p class="metric-title">出售占比</p><p class="metric-val" id="sellRate">0%</p><p class="metric-sub">供给端强度</p></article>
-        <article class="card"><p class="metric-title">平均置信度</p><p class="metric-val" id="avgConf">0</p><p class="metric-sub">规则 + AI 综合判断</p></article>
+        <article class="card"><p class="metric-title">平均置信度</p><p class="metric-val" id="avgConf">0</p><p class="metric-sub">AI 判断可信度</p></article>
       </section>
 
       <section class="row">
         <article class="card">
           <div class="toolbar">
-            <strong>帖子明细</strong>
+            <strong>帖子明细（真实数据）</strong>
             <button class="chip active" data-filter="all">全部</button>
             <button class="chip" data-filter="buy">求购</button>
             <button class="chip" data-filter="sell">出售</button>
@@ -149,38 +78,25 @@
           </div>
           <table>
             <thead>
-              <tr><th>时间</th><th>标题</th><th>意图</th><th>价格</th><th>置信度</th></tr>
+              <tr><th>发布时间</th><th>标题</th><th>意图</th><th>价格</th><th>置信度</th></tr>
             </thead>
             <tbody id="postRows"></tbody>
           </table>
         </article>
 
         <aside class="card">
-          <h3 style="margin-top: 0;">热门关键词（24h）</h3>
+          <h3 style="margin-top: 0;">热门关键词</h3>
           <ul class="list" id="hotList"></ul>
-          <h3>价格趋势摘要</h3>
-          <p class="small" id="trendSummary"></p>
+          <h3>AI 处理进度</h3>
+          <p class="small" id="progressMeta">等待中...</p>
+          <div id="progressList"></div>
         </aside>
       </section>
     </div>
 
     <script>
-      const posts = [
-        { time: "10:21", title: "收一台 M3 MacBook Air 16G", intent: "buy", price: "¥6200", confidence: 0.92 },
-        { time: "09:40", title: "出 iPhone 15 Pro 256G 国行", intent: "sell", price: "¥5800", confidence: 0.95 },
-        { time: "09:05", title: "问下 4070 Ti 二手行情", intent: "unknown", price: "-", confidence: 0.63 },
-        { time: "08:11", title: "求购 NAS 4 盘位", intent: "buy", price: "¥1800", confidence: 0.88 },
-        { time: "07:56", title: "出闲置 2TB NVMe 固态", intent: "sell", price: "¥620", confidence: 0.91 },
-        { time: "07:13", title: "收 iPad mini6", intent: "buy", price: "¥2300", confidence: 0.86 }
-      ];
-
-      const hotWords = [
-        ["MacBook", 38],
-        ["iPhone", 32],
-        ["显卡", 25],
-        ["NAS", 18],
-        ["SSD", 15]
-      ];
+      let posts = [];
+      let currentFilter = "all";
 
       function toIntentLabel(intent) {
         if (intent === "buy") return "求购";
@@ -188,47 +104,83 @@
         return "待判断";
       }
 
-      function render(filter = "all") {
+      function renderRows() {
         const rows = document.getElementById("postRows");
-        const current = filter === "all" ? posts : posts.filter(p => p.intent === filter);
-        rows.innerHTML = current.map(p => `
+        const current = currentFilter === "all" ? posts : posts.filter((p) => p.intent === currentFilter);
+        rows.innerHTML = current.map((p) => `
           <tr>
-            <td>${p.time}</td>
-            <td>${p.title}</td>
+            <td>${p.time || "-"}</td>
+            <td>${p.link ? `<a href="${p.link}" target="_blank">${p.title}</a>` : p.title}</td>
             <td><span class="badge ${p.intent}">${toIntentLabel(p.intent)}</span></td>
-            <td>${p.price}</td>
-            <td>${(p.confidence * 100).toFixed(0)}%</td>
+            <td>${p.price || "-"}</td>
+            <td>${(Number(p.confidence || 0) * 100).toFixed(0)}%</td>
           </tr>`).join("");
       }
 
-      function renderMetrics() {
-        const total = posts.length;
-        const buy = posts.filter(p => p.intent === "buy").length;
-        const sell = posts.filter(p => p.intent === "sell").length;
-        const avg = posts.reduce((s, p) => s + p.confidence, 0) / total;
-        document.getElementById("totalCount").textContent = total;
-        document.getElementById("buyRate").textContent = `${((buy / total) * 100).toFixed(0)}%`;
-        document.getElementById("sellRate").textContent = `${((sell / total) * 100).toFixed(0)}%`;
-        document.getElementById("avgConf").textContent = avg.toFixed(2);
+      function renderMetrics(metrics) {
+        document.getElementById("totalCount").textContent = metrics.total;
+        document.getElementById("buyRate").textContent = `${metrics.buy_rate}%`;
+        document.getElementById("sellRate").textContent = `${metrics.sell_rate}%`;
+        document.getElementById("avgConf").textContent = Number(metrics.avg_conf || 0).toFixed(2);
       }
 
-      function renderHot() {
+      function renderHot(hotWords) {
         const el = document.getElementById("hotList");
         el.innerHTML = hotWords.map(([word, count]) => `<li><span>${word}</span><span class="small">${count} 次</span></li>`).join("");
-        document.getElementById("trendSummary").textContent = "笔记本与手机类目活跃度持续上升，存储与 NAS 需求稳定，显卡价格讨论热度回暖。";
       }
 
-      document.querySelectorAll(".chip").forEach(btn => {
+      function renderProgress(data) {
+        const meta = document.getElementById("progressMeta");
+        meta.textContent = `状态: ${data.running ? "抓取/分析中" : "空闲"} | 最近抓取: ${data.last_fetch_at || "-"}${data.last_error ? ` | 错误: ${data.last_error}` : ""}`;
+        const list = document.getElementById("progressList");
+        list.innerHTML = (data.items || []).map((item) => `
+          <div class="progress-item">
+            <div class="small ${item.status === "running" ? "status-running" : "status-done"}">${item.status}</div>
+            <div>${item.title || "-"}</div>
+            <div class="small">${item.message || ""}</div>
+          </div>
+        `).join("");
+      }
+
+      async function loadDashboard() {
+        const res = await fetch("/api/v1/dashboard");
+        const data = await res.json();
+        posts = data.posts || [];
+        renderRows();
+        renderMetrics(data.metrics || { total: 0, buy_rate: 0, sell_rate: 0, avg_conf: 0 });
+        renderHot(data.hot_words || []);
+      }
+
+      async function loadProgress() {
+        const res = await fetch("/api/v1/progress");
+        const data = await res.json();
+        renderProgress(data);
+      }
+
+      document.querySelectorAll(".chip").forEach((btn) => {
         btn.addEventListener("click", () => {
-          document.querySelectorAll(".chip").forEach(b => b.classList.remove("active"));
+          document.querySelectorAll(".chip").forEach((b) => b.classList.remove("active"));
           btn.classList.add("active");
-          render(btn.dataset.filter);
+          currentFilter = btn.dataset.filter;
+          renderRows();
         });
       });
 
-      render();
-      renderMetrics();
-      renderHot();
+      document.getElementById("pollNowBtn").addEventListener("click", async () => {
+        await fetch("/api/v1/poll-now", { method: "POST" });
+        setTimeout(loadProgress, 300);
+      });
+
+      async function tick() {
+        try {
+          await Promise.all([loadDashboard(), loadProgress()]);
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      tick();
+      setInterval(tick, 5000);
     </script>
   </body>
 </html>
