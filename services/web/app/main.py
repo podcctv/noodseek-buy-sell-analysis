@@ -4,6 +4,7 @@ import asyncio
 import hashlib
 import hmac
 import json
+import os
 import re
 import secrets
 from datetime import datetime, timezone
@@ -15,6 +16,7 @@ import httpx
 from fastapi import FastAPI, Form, Request
 from fastapi.responses import RedirectResponse
 from fastapi.templating import Jinja2Templates
+from pydantic import SecretStr
 
 from .config_store import ConfigStore, mask_domain
 from .schemas import AIConfig, AppConfig, BrandTrainingSample, DomainConfig, PostOverride, SystemConfig
@@ -48,9 +50,44 @@ runtime = RuntimeState()
 RETRYABLE_HTTP_STATUS_CODES = {408, 409, 423, 425, 429, 500, 502, 503, 504, 520, 522, 524}
 
 
+def _apply_env_overrides(cfg: AppConfig) -> AppConfig:
+    if value := os.getenv("NDS_RSS_DOMAIN", "").strip():
+        cfg.domain.rss_domain = value
+    if value := os.getenv("NDS_CALLBACK_DOMAIN", "").strip():
+        cfg.domain.callback_domain = value
+
+    if value := os.getenv("NDS_AI_PROVIDER", "").strip():
+        cfg.ai.provider = value
+    if value := os.getenv("NDS_LLM_BASE_URL", "").strip():
+        cfg.ai.base_url = value
+    if value := os.getenv("NDS_LLM_API_KEY", "").strip():
+        cfg.ai.api_key = SecretStr(value)
+    if value := os.getenv("NDS_LLM_MODEL", "").strip():
+        cfg.ai.model = value
+    if value := os.getenv("NDS_LLM_AUTH_MODE", "").strip():
+        cfg.ai.auth_mode = value.lower()
+    if value := os.getenv("NDS_LLM_CHAT_COMPLETIONS_PATH", "").strip():
+        cfg.ai.chat_completions_path = value
+    if value := os.getenv("NDS_LLM_REQUEST_METHOD", "").strip():
+        cfg.ai.request_method = value.upper()
+    if value := os.getenv("NDS_LLM_TIMEOUT_SECONDS", "").strip():
+        cfg.ai.timeout_seconds = int(value)
+    if value := os.getenv("NDS_LLM_MAX_RETRIES", "").strip():
+        cfg.ai.max_retries = int(value)
+    if value := os.getenv("NDS_LLM_RETRY_DELAY_SECONDS", "").strip():
+        cfg.ai.retry_delay_seconds = int(value)
+    if value := os.getenv("NDS_LLM_CUSTOM_HEADERS_JSON", "").strip():
+        cfg.ai.custom_headers = json.loads(value)
+    return cfg
+
+
+def _load_runtime_config() -> AppConfig:
+    return _apply_env_overrides(store.load())
+
+
 async def _poll_loop() -> None:
     while True:
-        cfg = store.load()
+        cfg = _load_runtime_config()
         await _poll_once(cfg)
         await asyncio.sleep(cfg.system.rss_poll_interval_seconds)
 
@@ -239,7 +276,7 @@ async def _analyze_entry(entry: dict[str, str], cfg: AppConfig) -> dict[str, Any
 
 
 async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str, Any] | None:
-    cfg = store.load()
+    cfg = _load_runtime_config()
     memory = _build_brand_memory_prompt(cfg)
     prompt = (
         "你是二手交易帖分类器。请严格返回 JSON，不要输出其它文字。\\n"
@@ -763,7 +800,7 @@ def admin_settings(request: Request):
     redirect = _require_auth_redirect(request)
     if redirect:
         return redirect
-    cfg = store.load()
+    cfg = _load_runtime_config()
     masked_rss = mask_domain(str(cfg.domain.rss_domain)) if cfg.domain.privacy_protection_enabled else str(cfg.domain.rss_domain)
     masked_callback = (
         mask_domain(str(cfg.domain.callback_domain))
@@ -787,7 +824,7 @@ def brand_training_page(request: Request):
     redirect = _require_auth_redirect(request)
     if redirect:
         return redirect
-    cfg = store.load()
+    cfg = _load_runtime_config()
     prefill = {
         "brand": request.query_params.get("brand", ""),
         "product_name": request.query_params.get("product_name", ""),
@@ -849,7 +886,7 @@ def delete_brand_training_sample(request: Request, sample_id: str):
 
 @app.get("/api/v1/brand-training")
 def list_brand_training() -> dict[str, Any]:
-    cfg = store.load()
+    cfg = _load_runtime_config()
     samples = [s.model_dump(mode="json") for s in cfg.training.brand_samples[:200]]
     return {"items": samples, "total": len(cfg.training.brand_samples)}
 
@@ -859,7 +896,7 @@ def post_edit_page(request: Request, uid: str):
     redirect = _require_auth_redirect(request)
     if redirect:
         return redirect
-    cfg = store.load()
+    cfg = _load_runtime_config()
     override = _find_post_override(cfg, uid)
     post = next((item for item in runtime.posts if item.get("uid") == uid), None)
     if not post:
@@ -1023,4 +1060,4 @@ def update_system(
 @app.get("/api/v1/config", response_model=AppConfig)
 def get_config() -> AppConfig:
     _bootstrap_default_password()
-    return store.load()
+    return _load_runtime_config()

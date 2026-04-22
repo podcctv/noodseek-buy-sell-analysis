@@ -1,15 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_VERSION="1.0.1"
+SCRIPT_VERSION="2.0.0"
 REPO_SLUG_DEFAULT="your-org/noodseek-buy-sell-analysis"
 REPO_SLUG_RAW="${REPO_SLUG:-$REPO_SLUG_DEFAULT}"
 REPO_SLUG="${REPO_SLUG_RAW#/}"
 REPO_SLUG="${REPO_SLUG%/}"
 INSTALL_DIR="${INSTALL_DIR:-$HOME/noodseek-buy-sell-analysis}"
-IMAGE_REPO_DEFAULT="ghcr.io/${REPO_SLUG,,}"
-IMAGE_TAG_DEFAULT="latest"
-RAW_BASE="https://raw.githubusercontent.com/${REPO_SLUG}/main/deploy"
+BRANCH="${BRANCH:-main}"
 SCRIPT_PATH="${SCRIPT_PATH:-}"
 
 log() {
@@ -21,6 +19,8 @@ if [[ -z "${REPO_SLUG}" ]]; then
   exit 1
 fi
 
+REPO_URL="https://github.com/${REPO_SLUG}.git"
+
 require_cmd() {
   local cmd="$1"
   if ! command -v "$cmd" >/dev/null 2>&1; then
@@ -30,7 +30,7 @@ require_cmd() {
 }
 
 check_deps() {
-  require_cmd curl
+  require_cmd git
   require_cmd docker
   if docker compose version >/dev/null 2>&1; then
     COMPOSE_CMD=(docker compose)
@@ -42,94 +42,98 @@ check_deps() {
   fi
 }
 
-self_upgrade() {
-  if [[ -z "${SCRIPT_PATH}" ]]; then
-    return 0
+sync_repo() {
+  if [[ -d "${INSTALL_DIR}/.git" ]]; then
+    log "检测到已有安装，执行强制同步到 origin/${BRANCH}（覆盖 Git 文件）"
+    git -C "${INSTALL_DIR}" fetch --depth=1 origin "${BRANCH}"
+    git -C "${INSTALL_DIR}" reset --hard "origin/${BRANCH}"
+    git -C "${INSTALL_DIR}" clean -fd
+    return
   fi
 
-  local tmp latest
-  tmp="$(mktemp)"
-  if ! curl -fsSL "${RAW_BASE}/install.sh" -o "${tmp}"; then
-    rm -f "${tmp}"
-    log "跳过脚本自升级（无法下载远程 install.sh）"
-    return 0
+  if [[ -d "${INSTALL_DIR}" ]] && [[ -n "$(find "${INSTALL_DIR}" -mindepth 1 -maxdepth 1 -print -quit 2>/dev/null)" ]]; then
+    log "目录 ${INSTALL_DIR} 已存在且非空，但不是 Git 仓库。请先备份后清空该目录再安装。"
+    exit 1
   fi
 
-  latest="$(grep -E '^SCRIPT_VERSION=' "${tmp}" | head -n1 | cut -d'"' -f2)"
-  if [[ -n "${latest}" && "${latest}" != "${SCRIPT_VERSION}" ]]; then
-    log "检测到 install.sh 新版本 ${latest}（当前 ${SCRIPT_VERSION}），正在自升级..."
-    cp "${tmp}" "${SCRIPT_PATH}"
-    chmod +x "${SCRIPT_PATH}"
-    rm -f "${tmp}"
-    exec "${SCRIPT_PATH}" "$@"
-  fi
-
-  rm -f "${tmp}"
+  log "首次安装，克隆仓库: ${REPO_URL}"
+  git clone --depth=1 --branch "${BRANCH}" "${REPO_URL}" "${INSTALL_DIR}"
 }
 
-prepare_files() {
-  mkdir -p "${INSTALL_DIR}/deploy" "${INSTALL_DIR}/data"
-  curl -fsSL "${RAW_BASE}/docker-compose.yml" -o "${INSTALL_DIR}/deploy/docker-compose.yml"
-}
+ensure_env_file() {
+  local env_file example_file
+  env_file="${INSTALL_DIR}/deploy/.env"
+  example_file="${INSTALL_DIR}/deploy/.env.example"
 
-write_env() {
-  local image_repo image_tag web_port
-  image_repo="${IMAGE_REPO:-$IMAGE_REPO_DEFAULT}"
-  image_tag="${IMAGE_TAG:-$IMAGE_TAG_DEFAULT}"
-  web_port="${WEB_PORT:-8080}"
+  if [[ -f "${env_file}" ]]; then
+    log "保留现有配置: ${env_file}"
+    return
+  fi
 
-  cat > "${INSTALL_DIR}/deploy/.env" <<EOT
-IMAGE_REPO=${image_repo}
-IMAGE_TAG=${image_tag}
-WEB_PORT=${web_port}
+  if [[ -f "${example_file}" ]]; then
+    cp "${example_file}" "${env_file}"
+    log "已生成本地配置文件: ${env_file}（请按需填写敏感信息）"
+    return
+  fi
+
+  cat > "${env_file}" <<EOT
+# Docker 镜像与端口
+IMAGE_REPO=ghcr.io/${REPO_SLUG,,}
+IMAGE_TAG=latest
+WEB_PORT=8080
+
+# 域名/服务地址（建议本地维护，不提交云端）
+NDS_RSS_DOMAIN=https://rss.nodeseek.com/
+NDS_CALLBACK_DOMAIN=
+
+# AI 服务（敏感配置请仅保留在本机 .env）
+NDS_AI_PROVIDER=openai_compatible
+NDS_LLM_BASE_URL=
+NDS_LLM_API_KEY=
+NDS_LLM_MODEL=qwen3:4b
+NDS_LLM_AUTH_MODE=none
+NDS_LLM_CHAT_COMPLETIONS_PATH=/chat/completions
+NDS_LLM_REQUEST_METHOD=POST
+NDS_LLM_TIMEOUT_SECONDS=240
+NDS_LLM_MAX_RETRIES=1
+NDS_LLM_RETRY_DELAY_SECONDS=2
+NDS_LLM_CUSTOM_HEADERS_JSON={"Content-Type":"application/json"}
 EOT
+  log "已生成默认配置: ${env_file}"
 }
 
 pull_and_up() {
-  local image_repo image_tag
-  image_repo="${IMAGE_REPO:-$IMAGE_REPO_DEFAULT}"
-  image_tag="${IMAGE_TAG:-$IMAGE_TAG_DEFAULT}"
-
-  log "拉取镜像: ${image_repo}:${image_tag}"
-  docker pull "${image_repo}:${image_tag}"
-
-  log "启动服务"
-  (cd "${INSTALL_DIR}/deploy" && "${COMPOSE_CMD[@]}" --env-file .env up -d)
+  log "启动/更新服务容器"
+  (cd "${INSTALL_DIR}/deploy" && "${COMPOSE_CMD[@]}" --env-file .env pull)
+  (cd "${INSTALL_DIR}/deploy" && "${COMPOSE_CMD[@]}" --env-file .env up -d --remove-orphans)
 }
 
 print_next_steps() {
   local web_port
-  web_port="${WEB_PORT:-8080}"
+  web_port="$(awk -F'=' '/^WEB_PORT=/{print $2}' "${INSTALL_DIR}/deploy/.env" | tail -n1)"
+  web_port="${web_port:-8080}"
   cat <<EOT
 
-安装完成 ✅
+安装/升级完成 ✅
 - 安装目录: ${INSTALL_DIR}
 - 服务地址: http://127.0.0.1:${web_port}/admin/settings
+- 本地配置文件: ${INSTALL_DIR}/deploy/.env
 
 后续升级：
-  SCRIPT_PATH=${INSTALL_DIR}/deploy/install.sh REPO_SLUG=${REPO_SLUG} bash ${INSTALL_DIR}/deploy/install.sh
+  REPO_SLUG=${REPO_SLUG} bash ${INSTALL_DIR}/deploy/update.sh
 EOT
 }
 
 main() {
   check_deps
-  self_upgrade "$@"
-  prepare_files
+  sync_repo
 
-  if [[ -n "${SCRIPT_PATH}" ]]; then
-    local target_script source_real target_real
-    target_script="${INSTALL_DIR}/deploy/install.sh"
-
-    source_real="$(realpath -m "${SCRIPT_PATH}")"
-    target_real="$(realpath -m "${target_script}")"
-
-    if [[ "${source_real}" != "${target_real}" ]]; then
-      cp "${SCRIPT_PATH}" "${target_script}"
-      chmod +x "${target_script}"
-    fi
+  if [[ -n "${SCRIPT_PATH}" ]] && [[ -f "${SCRIPT_PATH}" ]]; then
+    cp "${SCRIPT_PATH}" "${INSTALL_DIR}/deploy/install.sh"
+    chmod +x "${INSTALL_DIR}/deploy/install.sh"
   fi
 
-  write_env
+  ensure_env_file
   pull_and_up
   print_next_steps
 }

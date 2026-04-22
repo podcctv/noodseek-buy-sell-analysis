@@ -88,7 +88,7 @@ RSS_POLL_INTERVAL_SECONDS=300
 ```
 
 
-## 一键安装 / 升级（含脚本自升级）
+## 一键安装 / 升级（Git 覆盖更新 + Docker 滚动）
 
 > 先把 `REPO_SLUG` 改成你自己的仓库地址（例如 `alice/noodseek-buy-sell-analysis`）。
 
@@ -108,8 +108,24 @@ REPO_SLUG=<REPO_SLUG> bash $HOME/noodseek-buy-sell-analysis/deploy/update.sh
 
 升级逻辑：
 - `update.sh` 会优先调用本地 `install.sh`。
-- `install.sh` 会先检查远程同路径脚本版本，如有新版本会先替换自己再继续执行。
-- 然后重新拉取 `deploy/docker-compose.yml` 与最新镜像并重启服务。
+- `install.sh` 会对安装目录执行 `git fetch + reset --hard + clean -fd`，仅覆盖 Git 文件。
+- 本地 `deploy/.env` 会被保留，不会在升级时覆盖。
+- 再执行 `docker compose pull && docker compose up -d --remove-orphans` 完成容器升级。
+
+## 本地 `.env` 配置（敏感信息不上云）
+
+部署完成后会自动生成 `${INSTALL_DIR}/deploy/.env`（若不存在），你可以把以下敏感配置只保存在本机：
+
+- `NDS_LLM_BASE_URL`
+- `NDS_LLM_API_KEY`
+- `NDS_LLM_CUSTOM_HEADERS_JSON`
+- 以及你自己的域名、回调地址等
+
+推荐流程：
+
+1. 以 `deploy/.env.example` 为模板维护本地 `.env`。
+2. 仓库中不要提交真实 token/地址，只提交示例值。
+3. 升级时只会覆盖 Git 文件，不会覆盖 `.env`。
 
 ## Docker 镜像 GitHub Action 与直接拉取
 

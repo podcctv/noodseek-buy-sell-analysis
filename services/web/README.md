@@ -29,6 +29,21 @@ uvicorn app.main:app --reload --port 8080
 - 登录页：`http://127.0.0.1:8080/admin/login`
 - 配置页：`http://127.0.0.1:8080/admin/settings`
 
+## `.env` 敏感配置覆盖（推荐）
+
+生产环境建议通过容器环境变量注入敏感信息（例如 API Key、模型网关地址），避免写入云端仓库。
+
+支持变量示例：
+
+- `NDS_RSS_DOMAIN`
+- `NDS_CALLBACK_DOMAIN`
+- `NDS_LLM_BASE_URL`
+- `NDS_LLM_API_KEY`
+- `NDS_LLM_MODEL`
+- `NDS_LLM_CUSTOM_HEADERS_JSON`（JSON 字符串）
+
+当这些环境变量存在时，会覆盖后台配置文件中的对应字段。
+
 ## API
 
 - `GET /api/v1/config`：读取当前配置
