@@ -72,8 +72,8 @@ def _require_auth_redirect(request: Request) -> RedirectResponse | None:
 
 
 @app.get("/")
-def index() -> RedirectResponse:
-    return RedirectResponse(url="/admin/settings", status_code=302)
+def index(request: Request):
+    return templates.TemplateResponse(request, "front_dashboard.html", {})
 
 
 @app.get("/admin/login")
