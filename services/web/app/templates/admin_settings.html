@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NodeSeek 后台配置</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; background: #f8fafc; color: #0f172a; }
+      h1 { margin-bottom: 8px; }
+      .card { background: #fff; border-radius: 10px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      .grid { display: grid; gap: 8px; }
+      label { font-weight: 600; font-size: 14px; }
+      input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+      button { padding: 8px 12px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+      .tip { color: #475569; font-size: 13px; }
+      .ok { color: #166534; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <h1>NodeSeek 后端配置中心</h1>
+    <p class="tip">统一在后台页面管理域名隐私、AI 参数、系统运行配置。</p>
+    {% if saved %}<p class="ok">保存成功 ✅</p>{% endif %}
+
+    <section class="card">
+      <h2>域名配置（隐私保护）</h2>
+      <p class="tip">当前展示：RSS {{ masked_rss }} {% if masked_callback %}| Callback {{ masked_callback }}{% endif %}</p>
+      <form class="grid" method="post" action="/admin/settings/domain">
+        <label>RSS 域名</label>
+        <input name="rss_domain" value="{{ config.domain.rss_domain }}" required />
+
+        <label>回调域名（可选）</label>
+        <input name="callback_domain" value="{{ config.domain.callback_domain or '' }}" />
+
+        <label>
+          <input type="checkbox" name="privacy_protection_enabled" {% if config.domain.privacy_protection_enabled %}checked{% endif %}/>
+          启用域名隐私保护展示
+        </label>
+
+        <button type="submit">保存域名配置</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>AI 配置</h2>
+      <form class="grid" method="post" action="/admin/settings/ai">
+        <label>Provider</label>
+        <input name="provider" value="{{ config.ai.provider }}" required />
+
+        <label>Base URL</label>
+        <input name="base_url" value="{{ config.ai.base_url }}" required />
+
+        <label>API Key</label>
+        <input name="api_key" value="{{ config.ai.api_key.get_secret_value() }}" />
+
+        <label>Model</label>
+        <input name="model" value="{{ config.ai.model }}" required />
+
+        <label>超时（秒）</label>
+        <input name="timeout_seconds" type="number" min="1" max="300" value="{{ config.ai.timeout_seconds }}" required />
+
+        <button type="submit">保存 AI 配置</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>系统配置</h2>
+      <form class="grid" method="post" action="/admin/settings/system">
+        <label>置信度阈值 (0~1)</label>
+        <input name="confidence_threshold" type="number" min="0" max="1" step="0.01" value="{{ config.system.confidence_threshold }}" required />
+
+        <label>RSS 拉取间隔（秒）</label>
+        <input name="rss_poll_interval_seconds" type="number" min="30" max="86400" value="{{ config.system.rss_poll_interval_seconds }}" required />
+
+        <label>时区</label>
+        <input name="timezone" value="{{ config.system.timezone }}" required />
+
+        <button type="submit">保存系统配置</button>
+      </form>
+    </section>
+  </body>
+</html>

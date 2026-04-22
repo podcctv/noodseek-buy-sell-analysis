@@ -97,3 +97,13 @@ RSS_POLL_INTERVAL_SECONDS=300
 - 增加 Telegram/飞书机器人推送
 - 增加导出 CSV/Excel
 - 增加审计日志与操作回滚
+
+## 新增：后端配置中心（Admin）
+
+已提供 `services/web` 模块，用于在后端页面统一管理：
+
+- 域名与隐私保护展示
+- AI Provider 与模型参数
+- 系统运行参数（阈值、轮询、时区）
+
+详见：`services/web/README.md`。
