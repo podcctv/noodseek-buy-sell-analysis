@@ -21,7 +21,7 @@ class AIConfig(BaseModel):
     provider: str = "openai_compatible"
     base_url: HttpUrl = Field(default_factory=lambda: _to_http_url("https://llm.428048.xyz/v1"))
     api_key: SecretStr = Field(default=SecretStr(""))
-    model: str = "gpt-4o-mini"
+    model: str = "qwen3:4b"
     timeout_seconds: int = Field(default=120, ge=1, le=1800)
     chat_completions_path: str = "/chat/completions"
     request_method: str = "POST"

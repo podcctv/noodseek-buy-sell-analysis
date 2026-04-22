@@ -133,9 +133,24 @@
         el.innerHTML = hotWords.map(([word, count]) => `<li><span>${word}</span><span class="small">${count} 次</span></li>`).join("");
       }
 
+      function formatToUtc8(value) {
+        if (!value) return "-";
+        const parsed = new Date(value);
+        if (Number.isNaN(parsed.getTime())) return value;
+        const utc8Ms = parsed.getTime() + (8 * 60 * 60 * 1000);
+        const utc8 = new Date(utc8Ms);
+        const year = utc8.getUTCFullYear();
+        const month = String(utc8.getUTCMonth() + 1).padStart(2, "0");
+        const day = String(utc8.getUTCDate()).padStart(2, "0");
+        const hour = String(utc8.getUTCHours()).padStart(2, "0");
+        const minute = String(utc8.getUTCMinutes()).padStart(2, "0");
+        const second = String(utc8.getUTCSeconds()).padStart(2, "0");
+        return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
+      }
+
       function renderProgress(data) {
         const meta = document.getElementById("progressMeta");
-        meta.textContent = `状态: ${data.running ? "抓取/分析中" : "空闲"} | 最近抓取: ${data.last_fetch_at || "-"}${data.last_error ? ` | 错误: ${data.last_error}` : ""}`;
+        meta.textContent = `状态: ${data.running ? "抓取/分析中" : "空闲"} | 最近抓取: ${formatToUtc8(data.last_fetch_at)}${data.last_error ? ` | 错误: ${data.last_error}` : ""}`;
         const list = document.getElementById("progressList");
         const statusClass = {
           running: "status-running",
@@ -148,6 +163,7 @@
             <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
               <div class="small ${statusClass[item.status] || ""}">${item.status}</div>
               ${item.status === "running" ? `<button type="button" class="btn-mini" data-cancel-uid="${item.uid}">取消</button>` : ""}
+              ${item.status === "failed" ? `<button type="button" class="btn-mini" data-retry-uid="${item.uid}">重试</button>` : ""}
             </div>
             <div>${item.title || "-"}</div>
             <div class="small">${item.message || ""}</div>
@@ -188,8 +204,14 @@
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         const uid = target.dataset.cancelUid;
-        if (!uid) return;
-        await fetch(`/api/v1/progress/${uid}/cancel`, { method: "POST" });
+        if (uid) {
+          await fetch(`/api/v1/progress/${uid}/cancel`, { method: "POST" });
+          await loadProgress();
+          return;
+        }
+        const retryUid = target.dataset.retryUid;
+        if (!retryUid) return;
+        await fetch(`/api/v1/progress/${retryUid}/retry`, { method: "POST" });
         await loadProgress();
       });
 
