@@ -6,49 +6,82 @@
     <title>NodeSeek 买卖分析面板</title>
     <style>
       :root {
-        --bg: #f1f5f9;
+        --bg: linear-gradient(180deg, #f3f6ff 0%, #f8fafc 100%);
         --card: #ffffff;
         --text: #0f172a;
         --muted: #64748b;
         --brand: #2563eb;
+        --brand-dark: #1d4ed8;
         --ok: #16a34a;
         --warn: #ea580c;
         --unknown: #475569;
+        --border: #e2e8f0;
       }
       * { box-sizing: border-box; }
-      body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: var(--bg); color: var(--text); }
-      .container { max-width: 1100px; margin: 24px auto; padding: 0 16px 32px; }
-      .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 10px; }
-      .title { margin: 0; font-size: 28px; }
-      .tip { color: var(--muted); margin: 6px 0 0; }
-      .btn { display: inline-flex; align-items: center; justify-content: center; background: var(--brand); color: #fff; text-decoration: none; border-radius: 8px; padding: 10px 14px; font-weight: 600; border: 0; cursor: pointer; }
+      body {
+        margin: 0;
+        font-family: "Inter", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .container { max-width: 1240px; margin: 28px auto; padding: 0 18px 36px; }
+      .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 18px; gap: 14px; }
+      .title { margin: 0; font-size: 38px; font-weight: 800; letter-spacing: 0.2px; }
+      .tip { color: var(--muted); margin: 8px 0 0; font-size: 15px; }
+      .btn { display: inline-flex; align-items: center; justify-content: center; background: var(--brand); color: #fff; text-decoration: none; border-radius: 10px; padding: 11px 15px; font-weight: 700; border: 0; cursor: pointer; box-shadow: 0 10px 22px rgba(37, 99, 235, 0.22); transition: all .2s ease; }
+      .btn:hover { transform: translateY(-1px); background: var(--brand-dark); }
+      .btn-ghost { background: #fff; color: var(--brand); border: 1px solid #bfdbfe; box-shadow: none; }
       .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
-      .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
-      .card { background: var(--card); border-radius: 12px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1); padding: 14px; }
-      .metric-title { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
-      .metric-val { margin: 0; font-size: 26px; font-weight: 700; }
+      .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 16px; }
+      .card {
+        background: var(--card);
+        border-radius: 16px;
+        border: 1px solid var(--border);
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
+        padding: 16px;
+      }
+      .metric-title { color: var(--muted); font-size: 13px; margin: 0 0 8px; font-weight: 600; }
+      .metric-val { margin: 0; font-size: 34px; font-weight: 800; }
       .metric-sub { margin: 6px 0 0; color: var(--muted); font-size: 13px; }
-      .row { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }
-      @media (max-width: 860px) { .row { grid-template-columns: 1fr; } }
+      .row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(280px, 1fr); gap: 14px; }
+      @media (max-width: 960px) {
+        .row { grid-template-columns: 1fr; }
+        .title { font-size: 30px; }
+      }
       .toolbar { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
-      .chip { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
-      .chip.active { border-color: var(--brand); color: var(--brand); }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { text-align: left; border-bottom: 1px solid #e2e8f0; padding: 9px 6px; font-size: 14px; vertical-align: top; }
-      .badge { display: inline-block; border-radius: 999px; padding: 2px 8px; color: #fff; font-size: 12px; font-weight: 700; }
+      .chip { border: 1px solid #cbd5e1; background: #fff; border-radius: 999px; padding: 6px 11px; cursor: pointer; font-size: 13px; font-weight: 600; }
+      .chip.active { border-color: var(--brand); background: #eff6ff; color: var(--brand); }
+      .table-wrap { overflow-x: auto; }
+      table { width: 100%; border-collapse: collapse; min-width: 860px; }
+      th, td {
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+        padding: 10px 8px;
+        font-size: 14px;
+        vertical-align: top;
+        line-height: 1.45;
+        word-break: keep-all;
+      }
+      td.title-col { min-width: 260px; }
+      td.brand-col { white-space: nowrap; min-width: 90px; }
+      td.price-col, td.conf-col { white-space: nowrap; }
+      .badge { display: inline-block; border-radius: 999px; padding: 3px 9px; color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
       .buy { background: var(--ok); }
       .sell { background: var(--warn); }
       .unknown { background: var(--unknown); }
       .list { margin: 0; padding: 0; list-style: none; }
-      .list li { padding: 8px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; gap: 10px; }
-      .small { color: var(--muted); font-size: 12px; }
-      .progress-item { border-bottom: 1px solid #e2e8f0; padding: 8px 0; }
-      .progress-item:last-child { border-bottom: 0; }
-      .status-running { color: #2563eb; }
-      .status-done { color: #16a34a; }
-      .status-failed { color: #dc2626; }
-      .status-cancelled { color: #64748b; }
+      .list li {
+        padding: 10px 0;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+      }
+      .list li span:first-child { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+      .small { color: var(--muted); font-size: 12px; white-space: nowrap; }
       .btn-mini { border: 1px solid #cbd5e1; background: #fff; color: #334155; border-radius: 6px; font-size: 12px; padding: 2px 6px; cursor: pointer; }
+      .explain { margin-top: 10px; color: var(--muted); font-size: 13px; line-height: 1.6; }
     </style>
   </head>
   <body>
@@ -56,10 +89,11 @@
       <header class="header">
         <div>
           <h1 class="title">NodeSeek 买卖分析面板</h1>
-          <p class="tip">实时抓取 RSS + AI 分类。可查看处理进度。</p>
+          <p class="tip">实时抓取 RSS + AI 分类，聚焦买卖数据与品牌热度。</p>
         </div>
         <div class="btn-group">
           <button class="btn" id="pollNowBtn" type="button">立即抓取</button>
+          <a class="btn btn-ghost" href="/progress">AI 处理进度</a>
           <a class="btn" href="/admin/login">进入后台配置</a>
         </div>
       </header>
@@ -80,20 +114,21 @@
             <button class="chip" data-filter="sell">出售</button>
             <button class="chip" data-filter="unknown">待判断</button>
           </div>
-          <table>
-            <thead>
-              <tr><th>类型</th><th>发布时间</th><th>标题</th><th>品牌</th><th>商品名称 | 配置</th><th>价格</th><th>置信度</th><th id="adminActionHead" style="display:none;">管理</th></tr>
-            </thead>
-            <tbody id="postRows"></tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>类型</th><th>发布时间</th><th>标题</th><th>品牌</th><th>商品名称 | 配置</th><th>价格</th><th>置信度</th><th id="adminActionHead" style="display:none;">管理</th></tr>
+              </thead>
+              <tbody id="postRows"></tbody>
+            </table>
+          </div>
         </article>
 
         <aside class="card">
-          <h3 style="margin-top: 0;">热门关键词</h3>
+          <h3 style="margin-top: 0; margin-bottom: 6px;">热门品牌</h3>
+          <p class="small" style="margin-top:0;">仅按帖子品牌字段统计，不展示标题关键词。</p>
           <ul class="list" id="hotList"></ul>
-          <h3>AI 处理进度</h3>
-          <p class="small" id="progressMeta">等待中...</p>
-          <div id="progressList"></div>
+          <p class="explain">想了解 AI 到底是如何处理的？请进入「AI 处理进度」页面查看每条任务状态、失败原因与重试/取消操作。</p>
         </aside>
       </section>
     </div>
@@ -120,11 +155,11 @@
           <tr>
             <td><span class="badge ${p.intent}">${toIntentLabel(p.intent)}</span></td>
             <td>${formatToUtc8(p.time)}</td>
-            <td>${p.link ? `<a href="${p.link}" target="_blank">${p.title}</a>` : p.title}</td>
-            <td>${p.brand || "未知"}</td>
+            <td class="title-col">${p.link ? `<a href="${p.link}" target="_blank">${p.title}</a>` : p.title}</td>
+            <td class="brand-col">${p.brand || "未知"}</td>
             <td>${[p.product_name || "-", p.product_config || "-"].join(" | ")}</td>
-            <td>${p.price || "-"}</td>
-            <td>${(Number(p.confidence || 0) * 100).toFixed(0)}%</td>
+            <td class="price-col">${p.price || "-"}</td>
+            <td class="conf-col">${(Number(p.confidence || 0) * 100).toFixed(0)}%</td>
             ${isAdmin ? `<td><a class="btn-mini" href="${buildEditUrl(p)}">编辑</a></td>` : ""}
           </tr>`).join("");
       }
@@ -138,6 +173,10 @@
 
       function renderHot(hotWords) {
         const el = document.getElementById("hotList");
+        if (!hotWords.length) {
+          el.innerHTML = `<li><span>暂无品牌数据</span><span class="small">0 次</span></li>`;
+          return;
+        }
         el.innerHTML = hotWords.map(([word, count]) => `<li><span>${word}</span><span class="small">${count} 次</span></li>`).join("");
       }
 
@@ -156,29 +195,6 @@
         return `${year}-${month}-${day} ${hour}:${minute}:${second}`;
       }
 
-      function renderProgress(data) {
-        const meta = document.getElementById("progressMeta");
-        meta.textContent = `状态: ${data.running ? "抓取/分析中" : "空闲"} | 最近抓取: ${formatToUtc8(data.last_fetch_at)}${data.last_error ? ` | 错误: ${data.last_error}` : ""}`;
-        const list = document.getElementById("progressList");
-        const statusClass = {
-          running: "status-running",
-          done: "status-done",
-          failed: "status-failed",
-          cancelled: "status-cancelled",
-        };
-        list.innerHTML = (data.items || []).map((item) => `
-          <div class="progress-item">
-            <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
-              <div class="small ${statusClass[item.status] || ""}">${item.status}</div>
-              ${item.status === "running" ? `<button type="button" class="btn-mini" data-cancel-uid="${item.uid}">取消</button>` : ""}
-              ${item.status === "failed" ? `<button type="button" class="btn-mini" data-retry-uid="${item.uid}">重试</button>` : ""}
-            </div>
-            <div>${item.title || "-"}</div>
-            <div class="small">${item.message || ""}</div>
-          </div>
-        `).join("");
-      }
-
       async function loadDashboard() {
         const res = await fetch("/api/v1/dashboard");
         const data = await res.json();
@@ -189,12 +205,6 @@
         renderRows();
         renderMetrics(data.metrics || { total: 0, buy_rate: 0, sell_rate: 0, avg_conf: 0 });
         renderHot(data.hot_words || []);
-      }
-
-      async function loadProgress() {
-        const res = await fetch("/api/v1/progress");
-        const data = await res.json();
-        renderProgress(data);
       }
 
       document.querySelectorAll(".chip").forEach((btn) => {
@@ -208,27 +218,11 @@
 
       document.getElementById("pollNowBtn").addEventListener("click", async () => {
         await fetch("/api/v1/poll-now", { method: "POST" });
-        setTimeout(loadProgress, 300);
-      });
-
-      document.getElementById("progressList").addEventListener("click", async (event) => {
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
-        const uid = target.dataset.cancelUid;
-        if (uid) {
-          await fetch(`/api/v1/progress/${uid}/cancel`, { method: "POST" });
-          await loadProgress();
-          return;
-        }
-        const retryUid = target.dataset.retryUid;
-        if (!retryUid) return;
-        await fetch(`/api/v1/progress/${retryUid}/retry`, { method: "POST" });
-        await loadProgress();
       });
 
       async function tick() {
         try {
-          await Promise.all([loadDashboard(), loadProgress()]);
+          await loadDashboard();
         } catch (e) {
           console.error(e);
         }

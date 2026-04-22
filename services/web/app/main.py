@@ -673,6 +673,11 @@ def index(request: Request):
     return templates.TemplateResponse(request, "front_dashboard.html", {})
 
 
+@app.get("/progress")
+def progress_page(request: Request):
+    return templates.TemplateResponse(request, "front_progress.html", {})
+
+
 @app.get("/api/v1/dashboard")
 async def dashboard_data(request: Request) -> dict[str, Any]:
     cfg = store.load()
@@ -686,10 +691,10 @@ async def dashboard_data(request: Request) -> dict[str, Any]:
 
     hot_counter: dict[str, int] = {}
     for p in posts:
-        for token in re.findall(r"[A-Za-z0-9\u4e00-\u9fff]{2,16}", p["title"]):
-            if token in {"求购", "出售", "闲置", "转让", "国行"}:
-                continue
-            hot_counter[token] = hot_counter.get(token, 0) + 1
+        brand = _clean_text(str(p.get("brand", "")))
+        if not brand or brand in {"未知", "-", "其他"}:
+            continue
+        hot_counter[brand] = hot_counter.get(brand, 0) + 1
 
     hot_words = sorted(hot_counter.items(), key=lambda x: x[1], reverse=True)[:8]
 
