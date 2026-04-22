@@ -21,7 +21,8 @@
       .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 18px; gap: 10px; }
       .title { margin: 0; font-size: 28px; }
       .tip { color: var(--muted); margin: 6px 0 0; }
-      .btn { background: var(--brand); color: #fff; text-decoration: none; border-radius: 8px; padding: 10px 14px; font-weight: 600; border: 0; cursor: pointer; }
+      .btn { display: inline-flex; align-items: center; justify-content: center; background: var(--brand); color: #fff; text-decoration: none; border-radius: 8px; padding: 10px 14px; font-weight: 600; border: 0; cursor: pointer; }
+      .btn-group { display: flex; gap: 8px; flex-wrap: wrap; }
       .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
       .card { background: var(--card); border-radius: 12px; box-shadow: 0 1px 3px rgba(15, 23, 42, 0.1); padding: 14px; }
       .metric-title { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
@@ -57,7 +58,7 @@
           <h1 class="title">NodeSeek 买卖分析面板</h1>
           <p class="tip">实时抓取 RSS + AI 分类。可查看处理进度。</p>
         </div>
-        <div>
+        <div class="btn-group">
           <button class="btn" id="pollNowBtn" type="button">立即抓取</button>
           <a class="btn" href="/admin/login">进入后台配置</a>
         </div>

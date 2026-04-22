@@ -11,7 +11,8 @@
       .grid { display: grid; gap: 8px; }
       label { font-weight: 600; font-size: 14px; }
       input, textarea { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
-      button { padding: 8px 12px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+      button, .btn-link { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 8px 12px; border: 0; border-radius: 8px; background: #2563eb; color: #fff; cursor: pointer; text-decoration: none; font-weight: 600; }
+      .btn-group { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
       .tip { color: #475569; font-size: 13px; }
       .ok { color: #166534; font-weight: 600; }
     </style>
@@ -19,10 +20,13 @@
   <body>
     <h1>NodeSeek 后端配置中心</h1>
     <p class="tip">统一在后台页面管理域名隐私、AI 参数、系统运行配置。</p>
-    <form method="post" action="/admin/logout" style="margin-bottom: 16px;">
-      <button type="submit">退出登录</button>
-    </form>
-    <p><a href="/admin/brand-training">进入品牌训练页面</a></p>
+    <div class="btn-group">
+      <form method="post" action="/admin/logout">
+        <button type="submit">退出登录</button>
+      </form>
+      <a class="btn-link" href="/">进入展示页面</a>
+      <a class="btn-link" href="/admin/brand-training">进入品牌训练页面</a>
+    </div>
     {% if saved %}<p class="ok">保存成功 ✅</p>{% endif %}
 
     <section class="card">
@@ -73,7 +77,13 @@
         <input name="model" value="{{ config.ai.model }}" required />
 
         <label>超时（秒）</label>
-        <input name="timeout_seconds" type="number" min="1" max="1800" value="{{ config.ai.timeout_seconds }}" required />
+        <input name="timeout_seconds" type="number" min="1" max="7200" value="{{ config.ai.timeout_seconds }}" required />
+
+        <label>重试次数（失败后自动重试）</label>
+        <input name="max_retries" type="number" min="0" max="5" value="{{ config.ai.max_retries }}" required />
+
+        <label>重试间隔（秒）</label>
+        <input name="retry_delay_seconds" type="number" min="0" max="60" value="{{ config.ai.retry_delay_seconds }}" required />
 
         <button type="submit">保存 AI 配置</button>
       </form>

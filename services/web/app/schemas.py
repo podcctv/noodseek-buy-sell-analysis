@@ -22,7 +22,9 @@ class AIConfig(BaseModel):
     base_url: HttpUrl = Field(default_factory=lambda: _to_http_url("https://llm.428048.xyz/v1"))
     api_key: SecretStr = Field(default=SecretStr(""))
     model: str = "qwen3:4b"
-    timeout_seconds: int = Field(default=120, ge=1, le=1800)
+    timeout_seconds: int = Field(default=240, ge=1, le=7200)
+    max_retries: int = Field(default=1, ge=0, le=5)
+    retry_delay_seconds: int = Field(default=2, ge=0, le=60)
     chat_completions_path: str = "/chat/completions"
     request_method: str = "POST"
     auth_mode: str = "none"
