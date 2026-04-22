@@ -220,10 +220,26 @@ async def _classify_with_ai(entry: dict[str, str], ai_cfg: AIConfig) -> dict[str
 
     url = _build_chat_completions_url(ai_cfg)
 
-    async with httpx.AsyncClient(timeout=ai_cfg.timeout_seconds) as client:
-        response = await client.request(ai_cfg.request_method.upper(), url, headers=headers, json=payload)
-        response.raise_for_status()
-        data = response.json()
+    data: dict[str, Any] | None = None
+    max_attempts = max(1, ai_cfg.max_retries + 1)
+    last_error: Exception | None = None
+
+    for attempt in range(1, max_attempts + 1):
+        try:
+            async with httpx.AsyncClient(timeout=ai_cfg.timeout_seconds) as client:
+                response = await client.request(ai_cfg.request_method.upper(), url, headers=headers, json=payload)
+                response.raise_for_status()
+                data = response.json()
+            break
+        except Exception as exc:  # noqa: BLE001
+            last_error = exc
+            if attempt >= max_attempts:
+                raise
+            if ai_cfg.retry_delay_seconds > 0:
+                await asyncio.sleep(ai_cfg.retry_delay_seconds)
+
+    if data is None and last_error is not None:
+        raise last_error
 
     raw = data.get("choices", [{}])[0].get("message", {}).get("content", "")
     if not raw:
@@ -696,6 +712,8 @@ def update_ai(
     custom_headers_text: str = Form(""),
     model: str = Form(...),
     timeout_seconds: int = Form(...),
+    max_retries: int = Form(1),
+    retry_delay_seconds: int = Form(2),
 ):
     redirect = _require_auth_redirect(request)
     if redirect:
@@ -718,6 +736,8 @@ def update_ai(
         custom_headers=custom_headers,
         model=model,
         timeout_seconds=timeout_seconds,
+        max_retries=max_retries,
+        retry_delay_seconds=retry_delay_seconds,
     )
     store.save(cfg)
     return RedirectResponse(url="/admin/settings?saved=1", status_code=303)

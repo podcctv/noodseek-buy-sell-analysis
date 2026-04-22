@@ -61,3 +61,10 @@ def test_trade_entry_filter():
         description="闲置转让",
         categories=["编程"],
     )
+
+
+def test_ai_config_supports_extended_timeout_and_retries():
+    cfg = AIConfig(model="test", timeout_seconds=3600, max_retries=3, retry_delay_seconds=5)
+    assert cfg.timeout_seconds == 3600
+    assert cfg.max_retries == 3
+    assert cfg.retry_delay_seconds == 5
