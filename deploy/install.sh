@@ -117,8 +117,16 @@ main() {
   prepare_files
 
   if [[ -n "${SCRIPT_PATH}" ]]; then
-    cp "${SCRIPT_PATH}" "${INSTALL_DIR}/deploy/install.sh"
-    chmod +x "${INSTALL_DIR}/deploy/install.sh"
+    local target_script source_real target_real
+    target_script="${INSTALL_DIR}/deploy/install.sh"
+
+    source_real="$(realpath -m "${SCRIPT_PATH}")"
+    target_real="$(realpath -m "${target_script}")"
+
+    if [[ "${source_real}" != "${target_real}" ]]; then
+      cp "${SCRIPT_PATH}" "${target_script}"
+      chmod +x "${target_script}"
+    fi
   fi
 
   write_env
