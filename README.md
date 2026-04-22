@@ -87,6 +87,44 @@ ANALYSIS_CONFIDENCE_THRESHOLD=0.70
 RSS_POLL_INTERVAL_SECONDS=300
 ```
 
+
+## 一键安装 / 升级（含脚本自升级）
+
+> 先把 `REPO_SLUG` 改成你自己的仓库地址（例如 `alice/noodseek-buy-sell-analysis`）。
+
+### 一键安装
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/<REPO_SLUG>/main/deploy/install.sh -o /tmp/nodeseek-install.sh
+chmod +x /tmp/nodeseek-install.sh
+SCRIPT_PATH=/tmp/nodeseek-install.sh REPO_SLUG=<REPO_SLUG> bash /tmp/nodeseek-install.sh
+```
+
+### 一键升级（应用 + install.sh 自身）
+
+```bash
+REPO_SLUG=<REPO_SLUG> bash $HOME/noodseek-buy-sell-analysis/deploy/update.sh
+```
+
+升级逻辑：
+- `update.sh` 会优先调用本地 `install.sh`。
+- `install.sh` 会先检查远程同路径脚本版本，如有新版本会先替换自己再继续执行。
+- 然后重新拉取 `deploy/docker-compose.yml` 与最新镜像并重启服务。
+
+## Docker 镜像 GitHub Action 与直接拉取
+
+仓库已补充工作流 `.github/workflows/docker-image.yml`：
+- `push main` / `push tag(v*)` 自动构建并推送到 `ghcr.io/<owner>/<repo>`。
+- PR 仅构建不推送。
+
+你可以直接通过 GitHub Container Registry 拉取镜像：
+
+```bash
+docker pull ghcr.io/<owner>/<repo>:latest
+# 或者指定 tag/commit SHA
+docker pull ghcr.io/<owner>/<repo>:v1.0.0
+```
+
 ## 开发路线
 
 详见 [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md)。

@@ -1,0 +1,9 @@
+services:
+  nodeseek-web:
+    image: ${IMAGE_REPO:-ghcr.io/owner/noodseek-buy-sell-analysis}:${IMAGE_TAG:-latest}
+    container_name: nodeseek-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:8080"
+    volumes:
+      - ./data:/app/data
