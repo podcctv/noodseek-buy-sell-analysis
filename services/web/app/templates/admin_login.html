@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NodeSeek 后台登录</title>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 24px; background: #f8fafc; color: #0f172a; }
+      .card { max-width: 420px; margin: 64px auto; background: #fff; border-radius: 10px; padding: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+      h1 { margin-top: 0; }
+      .grid { display: grid; gap: 8px; }
+      label { font-weight: 600; font-size: 14px; }
+      input { padding: 8px; border: 1px solid #cbd5e1; border-radius: 6px; }
+      button { margin-top: 8px; padding: 8px 12px; border: 0; border-radius: 6px; background: #2563eb; color: #fff; cursor: pointer; }
+      .tip { color: #475569; font-size: 13px; }
+      .err { color: #b91c1c; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <section class="card">
+      <h1>NodeSeek 配置中心登录</h1>
+      <p class="tip">默认密码：123456。首次登录后必须修改密码。</p>
+      {% if error %}<p class="err">密码错误，请重试。</p>{% endif %}
+      <form class="grid" method="post" action="/admin/login">
+        <label>管理员密码</label>
+        <input type="password" name="password" required />
+        <button type="submit">登录</button>
+      </form>
+    </section>
+  </body>
+</html>

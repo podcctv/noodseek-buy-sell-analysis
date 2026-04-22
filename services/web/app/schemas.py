@@ -23,6 +23,15 @@ class AIConfig(BaseModel):
     api_key: SecretStr = Field(default=SecretStr(""))
     model: str = "gpt-4o-mini"
     timeout_seconds: int = Field(default=30, ge=1, le=300)
+    chat_completions_path: str = "/chat/completions"
+    request_method: str = "POST"
+    auth_mode: str = "none"
+    custom_headers: dict[str, str] = Field(
+        default_factory=lambda: {
+            "Content-Type": "application/json",
+            "X-Ollama-Token": "df8b17534c1617cb66a7146cc1b544e5d59637764a2aff86",
+        }
+    )
 
 
 class SystemConfig(BaseModel):
@@ -34,6 +43,11 @@ class SystemConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
+    class AuthConfig(BaseModel):
+        password_hash: str = ""
+        force_password_change: bool = True
+
     domain: DomainConfig = Field(default_factory=DomainConfig)
     ai: AIConfig = Field(default_factory=AIConfig)
     system: SystemConfig = Field(default_factory=SystemConfig)
+    auth: AuthConfig = Field(default_factory=AuthConfig)
